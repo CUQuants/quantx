@@ -1,0 +1,16 @@
+fastapi[all]
+SQLAlchemy
+packaging
+websockets
+
+pydantic
+pydantic_core
+
+asyncpg
+aiosqlite
+
+greenlet
+annotated-types
+
+pytest
+anyio
