@@ -287,4 +287,7 @@ Icon
 # Windows shortcuts
 *.lnk
 
+# Firebase service account
+serviceAccount.json
+
 # End of https://www.toptal.com/developers/gitignore/api/python,vscode,pycharm

@@ -1,12 +1,9 @@
 from fastapi import Request, HTTPException, Depends
-
 from models import Account, AccountRole
-
 import firebase_admin
-from firebase_admin import auth
-import os
+from firebase_admin import auth, credentials
 
-cred = firebase_admin.credentials.Certificate(os.getenv("FIREBASE_ADMIN_CREDENTIALS"))
+cred = credentials.Certificate("../../serviceAccount.json")
 firebase_admin.initialize_app(cred)
 
 
@@ -24,12 +21,6 @@ async def current_user(request: Request) -> Account:
 
     return user
 
-    # user = getattr(request.state, "user", None)
-
-    # if not user:
-    #     raise HTTPException(status_code=401, detail="unauthorized")
-
-    # return user
 
 def require_roles(*allowed: AccountRole):
     allowed_set = set(allowed)
