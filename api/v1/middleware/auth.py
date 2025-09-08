@@ -5,6 +5,13 @@ from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 import json
+import logging
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+)
 
 
 class FirebaseAuthMiddleware(BaseHTTPMiddleware):
@@ -58,18 +65,21 @@ class FirebaseAuthMiddleware(BaseHTTPMiddleware):
             }
 
         except auth.InvalidIdTokenError:
+            logging.error(auth.InvalidIdTokenError)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid ID token",
                 headers={"WWW-Authenticate": "Bearer"}
             )
         except auth.ExpiredIdTokenError:
+            logging.error(auth.ExpiredIdTokenError)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token has expired",
                 headers={"WWW-Authenticate": "Bearer"}
             )
         except Exception as e:
+            logging.error(e)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Authentication failed: {str(e)}",
@@ -78,6 +88,9 @@ class FirebaseAuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         try:
+            if request.method == "OPTIONS":
+                return await call_next(request)
+                
             if self._path_allowed(request.url.path):
                 return await call_next(request)
 
@@ -99,6 +112,7 @@ class FirebaseAuthMiddleware(BaseHTTPMiddleware):
             return response
 
         except HTTPException as e:
+            logging.error(e)
             return Response(
                 content=json.dumps({"detail": e.detail}),
                 status_code=e.status_code,
@@ -106,7 +120,7 @@ class FirebaseAuthMiddleware(BaseHTTPMiddleware):
                 headers=e.headers
             )
         except Exception as e:
-            print(e)
+            logging.error(e)
             return Response(
                 content=json.dumps({"detail": "Internal server error"}),
                 status_code=500,

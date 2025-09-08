@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import firebase_admin
 from firebase_admin import credentials, auth
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from api.middleware.auth import FirebaseAuthMiddleware
+from api.v1.middleware.auth import FirebaseAuthMiddleware
 
 
 app = FastAPI(title="QuantX API", version="v1")
@@ -19,10 +19,11 @@ ANON_ROUTES = (
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080", "*"],
+    allow_origins=[    "http://127.0.0.1:8080", 
+    "http://localhost:8080",
+    "http://[::1]:8080"  ],
     allow_methods=["*"],
-    allow_headers=["*"],
-    allow_credentials=True,
+    allow_headers=["*"]
 )
 
 
@@ -41,8 +42,6 @@ def initialize_firebase():
 
 
 initialize_firebase()
-
-security = HTTPBearer()
 
 
 @app.get("/")
