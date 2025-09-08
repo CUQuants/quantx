@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 import firebase_admin
 from firebase_admin import credentials, auth
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from api.middleware.auth import FirebaseAuthMiddleware
 
 
 app = FastAPI(title="QuantX API", version="v1")
@@ -25,6 +26,12 @@ app.add_middleware(
 )
 
 
+app.add_middleware(FirebaseAuthMiddleware,
+                   allowed_paths=[],
+                   path_prefixes=[]
+                   )
+
+
 def initialize_firebase():
     if not firebase_admin._apps:
 
@@ -38,37 +45,17 @@ initialize_firebase()
 security = HTTPBearer()
 
 
-async def verify_token():
-    pass
-
-
 @app.get("/")
-async def read_route(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def read_route(request: Request):
 
-    try:
-        id_token = credentials.credentials
-        decoded_token = auth.verify_id_token(id_token)
+    uid = request.state.firebase_uid
+    email = request.state.firebase_email
 
-        uid = decoded_token['uid']
-        email = decoded_token.get('email', '')
+    return {
+        "uid": uid,
+        "email": email
+    }
 
-        return {"email": email, "uid": uid}
-
-    except auth.InvalidIdTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid ID token"
-        )
-    except auth.ExpiredIdTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication failed: {str(e)}"
-        )
 
 if __name__ == "__main__":
     import uvicorn

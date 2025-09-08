@@ -32,6 +32,8 @@ def require_roles(*allowed: AccountRole):
 
     return _dep
 
+
 require_admin = require_roles(AccountRole.ADMIN)
 require_mod = require_roles(AccountRole.ADMIN, AccountRole.MODERATOR)
-require_user = require_roles(AccountRole.ADMIN, AccountRole.MODERATOR, AccountRole.USER)
+require_user = require_roles(
+    AccountRole.ADMIN, AccountRole.MODERATOR, AccountRole.USER)
