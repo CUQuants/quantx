@@ -1,29 +1,36 @@
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, List
+from typing import Optional
 
 import sqlalchemy
 from sqlalchemy import Integer, String, Float, DateTime, Boolean
-from sqlalchemy.orm import Mapped, mapped_column, relationship, foreign  # <-- import foreign
+# <-- import foreign
+from sqlalchemy.orm import Mapped, mapped_column, relationship, foreign
 
 from . import Base
+
 
 class AccountRole(str, Enum):
     ADMIN = "admin"
     MODERATOR = "moderator"
     USER = "user"
 
+
 class Account(Base):
     __tablename__ = "accounts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    username: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
-    firebase_uid: Mapped[Optional[str]] = mapped_column(String, unique=True, index=True, nullable=True)
+    username: Mapped[str] = mapped_column(
+        String, unique=True, index=True, nullable=False)
+    firebase_uid: Mapped[Optional[str]] = mapped_column(
+        String, unique=True, index=True, nullable=True)
     balance: Mapped[float] = mapped_column(Float, default=1000.0)
     role: Mapped[AccountRole] = mapped_column(sqlalchemy.Enum(AccountRole))
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
-    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now(timezone.utc))
+    last_login_at: Mapped[Optional[datetime]
+                          ] = mapped_column(DateTime, nullable=True)
 
     orders: Mapped[list["Order"]] = relationship(
         "Order",
