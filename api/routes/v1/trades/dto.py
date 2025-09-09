@@ -2,7 +2,6 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from api.routes.v1.accounts.dto import AccountDTO
 from models import OrderSide, OrderType, OrderStatus
 
 class OrderDTO(BaseModel):

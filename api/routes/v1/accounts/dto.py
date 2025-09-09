@@ -1,10 +1,10 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
-from pydantic.v1 import BaseModel
+from pydantic import BaseModel
 
+from api.routes.v1.trades.dto import TradeDTO, OrderDTO, PositionDTO
 from models import AccountRole
-
 
 class AccountDTO(BaseModel):
     id: int
@@ -15,3 +15,6 @@ class AccountDTO(BaseModel):
 
 class AccountDetailsDTO(BaseModel):
     account: AccountDTO
+    orders: List[OrderDTO]
+    trades_affecting: List[TradeDTO]
+    positions: List[PositionDTO]

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.db import get_session
 from models import Account, AccountRole
 
 from firebase_admin import auth as fb_auth
