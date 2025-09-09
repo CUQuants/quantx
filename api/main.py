@@ -13,15 +13,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
-tags_metadata = [
-    {"name": "v1", "description": "Version 1 endpoints (Current)"},
-]
-
 app = FastAPI(
     name="QuantX API",
     version="v1",
-    lifespan=lifespan,
-    openapi_tags=tags_metadata,
+    lifespan=lifespan
 )
 
 app.include_router(all_routes, prefix="/api")

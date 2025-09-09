@@ -6,6 +6,7 @@ from fastapi import HTTPException, Header, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import roles
 
 from api.db import get_session
 from models import Account, AccountRole
@@ -188,14 +189,20 @@ admin = require_roles(AccountRole.ADMIN)
 moderator = require_roles(AccountRole.MODERATOR)
 user  = require_roles(AccountRole.USER, AccountRole.MODERATOR, AccountRole.ADMIN)
 
-def owner_or_admin(param_name: str = "account_id"):
+def owner_or_role(param_name: str = "account_id", *roles: AccountRole):
     def _dep(request: Request, auth: AuthContext = Depends(current_auth)) -> AuthContext:
         raw = request.path_params.get(param_name) or request.query_params.get(param_name)
         try:
             target_id = int(raw)
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail=f"Invalid {param_name}")
-        if auth.role != AccountRole.ADMIN and auth.account_id != target_id:
+        if auth.role not in roles and auth.account_id != target_id:
             raise HTTPException(status_code=403, detail="Not authorized for this resource")
         return auth
     return _dep
+
+def owner_or_admin(param_name="account_id"):
+    return owner_or_role(param_name, AccountRole.ADMIN)
+
+def owner_or_mod(param_name="account_id"):
+    return owner_or_role(param_name, AccountRole.ADMIN, AccountRole.MODERATOR)
