@@ -11,6 +11,7 @@ from api.routes.v1.accounts.queries import get_account_by_id, get_orders_by_acco
     get_positions_by_account_id
 from api.routes.v1.trades.dto import OrderDTO, TradeDTO, PositionDTO
 from api.security.deps import current_auth, AuthContext, moderator, admin, owner_or_admin, owner_or_mod
+from api.util.pagination import apply_time_symbol_filters, where_if, paginate
 from models import Account, Order, OrderStatus, Trade, Position
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -48,22 +49,18 @@ async def get_orders(
 ):
     stmt = get_orders_by_account_id(account_id)
 
-    if filters.after:
-        stmt = stmt.where(Order.created_at >= filters.after)
+    stmt = apply_time_symbol_filters(
+        stmt,
+        ts_col=Order.created_at,
+        after=filters.after,
+        before=filters.before,
+        symbol_col=Order.symbol,
+        symbol=filters.symbol,
+    )
 
-    if filters.before:
-        stmt = stmt.where(Order.created_at < filters.before)
+    stmt = where_if(stmt, filters.status, Order.status == filters.status)
 
-    if filters.symbol:
-        stmt = stmt.where(Order.symbol == filters.symbol)
-
-    if filters.status:
-        stmt = stmt.where(Order.status == filters.status)
-
-    offset = (filters.page + 1) * filters.page_size
-    limit = filters.page_size
-
-    stmt = stmt.offset(offset).limit(limit)
+    stmt = paginate(stmt, filters.page, filters.page_size)
 
     resp = await session.execute(stmt)
     orders = resp.scalars().all()
@@ -85,22 +82,18 @@ async def get_trades(
 ):
     stmt = get_trades_by_account_id(account_id)
 
-    if filters.after:
-        stmt = stmt.where(Trade.created_at >= filters.after)
+    stmt = apply_time_symbol_filters(
+        stmt,
+        ts_col=Trade.created_at,
+        after=filters.after,
+        before=filters.before,
+        symbol_col=Trade.symbol,
+        symbol=filters.symbol,
+    )
 
-    if filters.before:
-        stmt = stmt.where(Trade.created_at < filters.before)
+    stmt = where_if(stmt, filters.quantity, Trade.quantity >= filters.quantity)
 
-    if filters.symbol:
-        stmt = stmt.where(Trade.symbol == filters.symbol)
-
-    if filters.quantity:
-        stmt = stmt.where(Trade.quantity >= filters.quantity)
-
-    offset = (filters.page + 1) * filters.page_size
-    limit = filters.page_size
-
-    stmt = stmt.offset(offset).limit(limit)
+    stmt = paginate(stmt, filters.page, filters.page_size)
 
     resp = await session.execute(stmt)
     trades = resp.scalars().all()
@@ -122,22 +115,18 @@ async def get_positions(
 ):
     stmt = get_positions_by_account_id(account_id)
 
-    if filters.after:
-        stmt = stmt.where(Position.updated_at >= filters.after)
+    stmt = apply_time_symbol_filters(
+        stmt,
+        ts_col=Position.updated_at,
+        after=filters.after,
+        before=filters.before,
+        symbol_col=Position.symbol,
+        symbol=filters.symbol,
+    )
 
-    if filters.before:
-        stmt = stmt.where(Position.updated_at < filters.before)
+    stmt = where_if(stmt, filters.quantity, Position.quantity >= filters.quantity)
 
-    if filters.symbol:
-        stmt = stmt.where(Position.symbol == filters.symbol)
-
-    if filters.quantity:
-        stmt = stmt.where(Position.quantity >= filters.quantity)
-
-    offset = (filters.page + 1) * filters.page_size
-    limit = filters.page_size
-
-    stmt = stmt.offset(offset).limit(limit)
+    stmt = paginate(stmt, filters.page, filters.page_size)
 
     resp = await session.execute(stmt)
     positions = resp.scalars().all()
