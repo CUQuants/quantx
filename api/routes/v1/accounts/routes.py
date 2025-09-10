@@ -21,7 +21,7 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
     response_model=AccountDTO,
 )
 async def get_me(auth: AuthContext = Depends(current_auth)):
-    return AccountDTO.from_orm(auth.account)
+    return AccountDTO.model_validate(auth.account)
 
 @router.get(
     "/{account_id}",

@@ -1,7 +1,19 @@
+from datetime import datetime
 from typing import Any, Optional, Sequence
 
+from pydantic import BaseModel
 from sqlalchemy import ColumnElement
 from sqlalchemy.sql import Select
+
+class PaginatedResult(BaseModel):
+    page: int
+    page_size: int
+
+class PaginatedFilters(BaseModel):
+    after: Optional[datetime] = None
+    before: Optional[datetime] = None
+    page: Optional[int] = 0
+    page_size: int = 50
 
 def where_if(stmt: Select, cond: Any, criterion: ColumnElement[bool]) -> Select:
     """Apply .where(...) only if cond is not None / truthy."""

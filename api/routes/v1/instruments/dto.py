@@ -1,8 +1,9 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel
 
+from api.util.pagination import PaginatedFilters, PaginatedResult
 from models import InstrumentType, OptionType
 
 class InstrumentDTO(BaseModel):
@@ -33,3 +34,12 @@ class FutureDTO(InstrumentDTO):
     multiplier: float
     initial_margin_rate: float
     maintenance_margin_rate: float
+
+#Query DTO
+class InstrumentsResult(PaginatedResult):
+    instruments: List[InstrumentDTO]
+
+class InstrumentsFilters(PaginatedFilters):
+    active: Optional[bool] = None
+    type: Optional[InstrumentType] = None
+    search: Optional[str] = None
