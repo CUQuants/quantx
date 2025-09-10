@@ -47,7 +47,6 @@ class Equity(Instrument):
 class Option(Instrument):
     __tablename__ = "options"
 
-
     id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
     underlying_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), index=True)
 
