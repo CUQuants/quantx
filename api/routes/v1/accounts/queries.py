@@ -18,7 +18,7 @@ get_full_account_by_id: Callable[[int], Select] = \
             selectinload(Account.trades),
             selectinload(Account.positions),
         )
-    )
+)
 
 get_orders_by_account_id: Callable[[int], Select] = \
     lambda account_id: select(Order).where(Account.id == account_id)
