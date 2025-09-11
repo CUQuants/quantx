@@ -1,8 +1,10 @@
 from datetime import datetime
 
 from pydantic import BaseModel
+from typing import Literal
 
 from models import OrderSide, OrderType, OrderStatus
+
 
 class OrderDTO(BaseModel):
     id: str
@@ -16,6 +18,7 @@ class OrderDTO(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class TradeDTO(BaseModel):
     id: str
     buy_order: OrderDTO
@@ -26,6 +29,7 @@ class TradeDTO(BaseModel):
     value: float
     created_at: datetime
 
+
 class PositionDTO(BaseModel):
     id: str
     symbol: str
@@ -34,3 +38,13 @@ class PositionDTO(BaseModel):
     unrealized_pnl: float
     realized_pnl: float
     updated_at: datetime
+
+
+class TradeRequest(BaseModel):
+    symbol: str
+    quantity: int
+    price: float
+    value: float
+    order_type: OrderSide
+    buy_order_id: str
+    sell_order_id: str

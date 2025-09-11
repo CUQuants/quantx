@@ -15,36 +15,48 @@ class AccountDTO(BaseModel):
     role: AccountRole
     last_login_at: Optional[datetime]
 
-#Be weary of use, super duper expensive to query
+# Be weary of use, super duper expensive to query
+
+
 class FullAccountDTO(BaseModel):
     account: AccountDTO
     orders: List[OrderDTO]
     trades_affecting: List[TradeDTO]
     positions: List[PositionDTO]
 
-#DTOs for Paginated Results; Orders, Trades, etc.
+# DTOs for Paginated Results; Orders, Trades, etc.
+
+
 class OrdersResult(PaginatedResult):
     orders: List[OrderDTO]
+
 
 class TradesResult(PaginatedResult):
     trades: List[TradeDTO]
 
+
 class PositionsResult(PaginatedResult):
     positions: List[PositionDTO]
 
-#Query Parameter Schemas for Orders,Trades,Positions filtering
+# Query Parameter Schemas for Orders,Trades,Positions filtering
+
+
 class OrdersFilters(PaginatedFilters):
     status: Optional[OrderStatus] = None
     symbol: Optional[str] = None
+
 
 class TradesFilters(PaginatedFilters):
     symbol: Optional[str] = None
     quantity: Optional[int] = None
 
+
 class PositionsFilters(PaginatedFilters):
     symbol: Optional[str] = None
     quantity: Optional[int] = None
 
-#Post/Patch Request/Response Schemas
+# Post/Patch Request/Response Schemas
+
+
 class AccountUpdateBalanceRequest(BaseModel):
     balance: float

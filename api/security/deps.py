@@ -24,18 +24,21 @@ class AuthContext:
     def account_id(self) -> int: return self.account.id
 
     @property
-    def username(self) -> str:   return self.account.username
+    def username(self) -> str: return self.account.username
 
     @property
     def role(self) -> AccountRole: return self.account.role
+
 
 async def _get_account_by_uid(session: AsyncSession, uid: str) -> Optional[Account]:
     res = await session.execute(select(Account).where(Account.firebase_uid == uid))
     return res.scalar_one_or_none()
 
+
 async def _get_account_by_username(session: AsyncSession, username: str) -> Optional[Account]:
     res = await session.execute(select(Account).where(Account.username == username))
     return res.scalar_one_or_none()
+
 
 async def _unique_username(session: AsyncSession, base: str) -> str:
     candidate, n = base, 1
@@ -43,6 +46,7 @@ async def _unique_username(session: AsyncSession, base: str) -> str:
         candidate = f"{base}-{n}"
         n += 1
     return candidate
+
 
 async def _get_or_create_account(
     session: AsyncSession,
@@ -84,18 +88,22 @@ async def _get_or_create_account(
     await session.refresh(acct)
     return acct
 
+
 async def _touch_last_login(session: AsyncSession, account: Account) -> None:
     account.last_login_at = datetime.now(timezone.utc)
     session.add(account)
     await session.commit()
 
+
 def _extract_bearer(auth_header: Optional[str]) -> Optional[str]:
-    if not auth_header: return None
+    if not auth_header:
+        return None
     try:
         scheme, token = auth_header.split(" ", 1)
     except ValueError:
         return None
     return token if scheme.lower() == "bearer" and token else None
+
 
 def _verify_token_or_401(id_token: str) -> dict[str, Any]:
     try:
@@ -119,6 +127,7 @@ def _verify_token_or_401(id_token: str) -> dict[str, Any]:
             headers={"WWW-Authenticate": "Bearer"}
         )
 
+
 async def optional_auth_context(
     authorization: Optional[str] = Header(None, alias="Authorization"),
     session: AsyncSession = Depends(get_session),
@@ -134,11 +143,13 @@ async def optional_auth_context(
     if require_google_provider:
         provider = (decoded.get("firebase") or {}).get("sign_in_provider")
         if provider != "google.com":
-            raise HTTPException(status_code=401, detail="Google sign-in required")
+            raise HTTPException(
+                status_code=401, detail="Google sign-in required")
 
     uid = decoded["uid"]
     email = decoded.get("email") or ""
-    display_name = decoded.get("name") or decoded.get("displayName")  # Google usually sets "name"
+    display_name = decoded.get("name") or decoded.get(
+        "displayName")  # Google usually sets "name"
 
     acct = await _get_or_create_account(
         session, firebase_uid=uid, email=email, display_name=display_name
@@ -147,10 +158,12 @@ async def optional_auth_context(
 
     return AuthContext(uid=uid, email=email, account=acct)
 
+
 async def current_auth(
     authorization: Optional[str] = Header(None, alias="Authorization"),
     session: AsyncSession = Depends(get_session),
-    require_google_provider: bool = True,    # default ON since you're using Google OAuth
+    # default ON since you're using Google OAuth
+    require_google_provider: bool = True,
 ) -> AuthContext:
     token = _extract_bearer(authorization)
     if not token:
@@ -165,7 +178,8 @@ async def current_auth(
     if require_google_provider:
         provider = (decoded.get("firebase") or {}).get("sign_in_provider")
         if provider != "google.com":
-            raise HTTPException(status_code=401, detail="Google sign-in required")
+            raise HTTPException(
+                status_code=401, detail="Google sign-in required")
 
     uid = decoded["uid"]
     email = decoded.get("email") or ""
@@ -178,31 +192,41 @@ async def current_auth(
 
     return AuthContext(uid=uid, email=email, account=acct)
 
+
 def require_roles(*roles: AccountRole) -> Callable[[AuthContext], AuthContext]:
     def _dep(auth: AuthContext = Depends(current_auth)) -> AuthContext:
         if auth.role not in roles:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
+            raise HTTPException(
+                status_code=403, detail="Insufficient permissions")
         return auth
     return _dep
+
 
 admin = require_roles(AccountRole.ADMIN)
 moderator = require_roles(AccountRole.MODERATOR)
-user  = require_roles(AccountRole.USER, AccountRole.MODERATOR, AccountRole.ADMIN)
+user = require_roles(
+    AccountRole.USER, AccountRole.MODERATOR, AccountRole.ADMIN)
+
 
 def owner_or_role(param_name: str = "account_id", *roles: AccountRole):
     def _dep(request: Request, auth: AuthContext = Depends(current_auth)) -> AuthContext:
-        raw = request.path_params.get(param_name) or request.query_params.get(param_name)
+        raw = request.path_params.get(
+            param_name) or request.query_params.get(param_name)
         try:
             target_id = int(raw)
         except (TypeError, ValueError):
-            raise HTTPException(status_code=400, detail=f"Invalid {param_name}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid {param_name}")
         if auth.role not in roles and auth.account_id != target_id:
-            raise HTTPException(status_code=403, detail="Not authorized for this resource")
+            raise HTTPException(
+                status_code=403, detail="Not authorized for this resource")
         return auth
     return _dep
 
+
 def owner_or_admin(param_name="account_id"):
     return owner_or_role(param_name, AccountRole.ADMIN)
+
 
 def owner_or_mod(param_name="account_id"):
     return owner_or_role(param_name, AccountRole.ADMIN, AccountRole.MODERATOR)
