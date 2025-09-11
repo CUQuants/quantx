@@ -5,15 +5,18 @@ from pydantic import BaseModel
 from sqlalchemy import ColumnElement
 from sqlalchemy.sql import Select
 
+
 class PaginatedResult(BaseModel):
     page: int
     page_size: int
+
 
 class PaginatedFilters(BaseModel):
     after: Optional[datetime] = None
     before: Optional[datetime] = None
     page: Optional[int] = 0
     page_size: int = 50
+
 
 def where_if(stmt: Select, cond: Any, criterion: ColumnElement[bool]) -> Select:
     """Apply .where(...) only if cond is not None / truthy."""
@@ -22,6 +25,7 @@ def where_if(stmt: Select, cond: Any, criterion: ColumnElement[bool]) -> Select:
     if isinstance(cond, (str, Sequence)) and not cond:  # empty string/list
         return stmt
     return stmt.where(criterion)
+
 
 def apply_time_symbol_filters(
     stmt: Select,
@@ -33,10 +37,11 @@ def apply_time_symbol_filters(
     symbol: Optional[str] = None,
 ) -> Select:
     stmt = where_if(stmt, after,  ts_col >= after)
-    stmt = where_if(stmt, before, ts_col <  before)
+    stmt = where_if(stmt, before, ts_col < before)
     if symbol_col is not None:
         stmt = where_if(stmt, symbol, symbol_col == symbol)
     return stmt
+
 
 def paginate(stmt: Select, page: int, page_size: int) -> Select:
     offset = page * page_size

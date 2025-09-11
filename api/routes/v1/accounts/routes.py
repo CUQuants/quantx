@@ -16,12 +16,14 @@ from models import Account, Order, OrderStatus, Trade, Position
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
+
 @router.get(
     "/me",
     response_model=AccountDTO,
 )
 async def get_me(auth: AuthContext = Depends(current_auth)):
     return AccountDTO.model_validate(auth.account)
+
 
 @router.get(
     "/{account_id}",
@@ -36,6 +38,7 @@ async def get_account(account_id: int, session: AsyncSession = Depends(get_sessi
         raise HTTPException(status_code=404, detail="Account not found")
 
     return AccountDTO.model_validate(account)
+
 
 @router.get(
     "/{account_id}/orders",
@@ -71,6 +74,7 @@ async def get_orders(
         orders=[OrderDTO.model_validate(o) for o in orders],
     )
 
+
 @router.get(
     "/{account_id}/trades",
     response_model=TradesResult,
@@ -104,6 +108,7 @@ async def get_trades(
         trades=[TradeDTO.model_validate(t) for t in trades],
     )
 
+
 @router.get(
     "/{account_id}/positions",
     response_model=PositionsResult,
@@ -124,7 +129,8 @@ async def get_positions(
         symbol=filters.symbol,
     )
 
-    stmt = where_if(stmt, filters.quantity, Position.quantity >= filters.quantity)
+    stmt = where_if(stmt, filters.quantity,
+                    Position.quantity >= filters.quantity)
 
     stmt = paginate(stmt, filters.page, filters.page_size)
 
@@ -136,6 +142,7 @@ async def get_positions(
         page_size=filters.page_size,
         positions=[PositionDTO.model_validate(p) for p in positions],
     )
+
 
 @router.put(
     "/{account_id}/balance",
