@@ -14,6 +14,7 @@ class AccountRole(str, Enum):
     ADMIN = "admin"
     MODERATOR = "moderator"
     USER = "user"
+    AGENT = "agent"
 
 
 class Account(Base):

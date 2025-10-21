@@ -1,0 +1,13 @@
+moves:
+  - name: Flood
+    intensity: 0.8
+    duration_s: 2.0
+  - name: FlashCrash
+    intensity: 1.0
+    duration_s: 1.5
+  - name: Earthquake
+    intensity: 0.7
+    duration_s: 2.5
+  - name: Recover
+    intensity: 1.0
+    duration_s: 2.0
