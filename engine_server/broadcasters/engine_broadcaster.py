@@ -7,10 +7,11 @@ from websockets.asyncio.server import ServerConnection
 from sqlalchemy.ext.asyncio import AsyncSession
 from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 from services.engine_holder import engine_singleton
+from engine_server.event_bus.event_bus import EventBus
 
 
 class OrderBroadcaster(BaseBroadcaster):
-    def __init__(self, host, port, interval: float, price_lower_bound: float, price_upper_bound: float, auth_service: AuthService, tickers: List[str], db_session: AsyncSession):
+    def __init__(self, host, port, interval: float, price_lower_bound: float, price_upper_bound: float, auth_service: AuthService, tickers: List[str], db_session: AsyncSession, bus: EventBus):
         super().__init__(host, port, interval)
         self.price_lower_bound = price_lower_bound
         self.price_upper_bound = price_upper_bound
