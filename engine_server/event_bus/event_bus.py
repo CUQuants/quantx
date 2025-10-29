@@ -14,6 +14,21 @@ SubscriberFn = Callable[[dict], Awaitable[None]]
 
 
 class EventBus:
+    """
+    The event bus handles communication between the matching engine and the broadcasting service.
+    When adding a subscriber, you pass in an event type, and a callback function that gets executed when a specific type of event occurs.
+    When running it in the main file, you would pass in methods that are a part of both the matching engine and the broadcasting service.
+
+    For example:
+
+    event_bus = EventBus()
+
+    engine = MatchingEngine()
+
+    event_bus.subscribe_event(EventType.ORDER, engine.add_order)
+
+    When an order is published to the event bus, the matching engine then receives this order and executes the add_order method
+    """
 
     def __init__(self):
         self.rooms: Dict[EventType, Set[SubscriberFn]] = {
