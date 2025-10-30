@@ -12,10 +12,8 @@ from engine_server.broadcasters.broadcast_data import MarketDataSnapshot
 
 
 class OrderBroadcaster(BaseBroadcaster):
-    def __init__(self, host, port, interval: float, price_lower_bound: float, price_upper_bound: float, auth_service: AuthService, tickers: List[str], db_session: AsyncSession, bus: EventBus):
+    def __init__(self, host, port, interval: float, auth_service: AuthService, tickers: List[str], db_session: AsyncSession, bus: EventBus):
         super().__init__(host, port, interval)
-        self.price_lower_bound = price_lower_bound
-        self.price_upper_bound = price_upper_bound
         self.auth_service = auth_service
         self.db_session = db_session
         self.tickers = tickers

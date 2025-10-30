@@ -8,8 +8,7 @@ from websockets.asyncio.server import ServerConnection
 
 class BaseBroadcaster(ABC):
 
-    def __init__(self, host, port, interval: float, timeout=None):
-        self.interval = interval
+    def __init__(self, host, port, timeout=None):
         self.host = host
         self.port = port
         self.clients = set()
