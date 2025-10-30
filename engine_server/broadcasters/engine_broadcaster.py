@@ -45,7 +45,7 @@ class OrderBroadcaster(BaseBroadcaster):
             async with self.locks[ticker]:
                 ticker_data = self.market_data.get(ticker)
                 initial_snapshot = ticker_data.get_snapshot()
-                message = {"type": "batch", "orders": initial_snapshot}
+            message = {"type": "batch", "orders": initial_snapshot}
             await client.send(json.dumps(message))
 
     def extract_ticker(self, client: ServerConnection):
@@ -66,19 +66,14 @@ class OrderBroadcaster(BaseBroadcaster):
         ticker = msg.get("ticker")
 
         async with self.locks[ticker]:
-            print("HELLO")
             try:
                 ticker_data = self.market_data[ticker]
                 ticker_data.remove_order(bid_price, quantity, Side.BUY)
                 ticker_data.remove_order(ask_price, quantity, Side.SELL)
+                new_data = ticker_data.get_snapshot()
             except Exception as e:
                 print(e)
-
-        await self.broadcast_to_ticker(ticker, {
-            "type": "trade",
-            "price": ask_price,
-            "quantity": quantity
-        })
+        await self.broadcast_to_ticker(ticker, {"type": "batch", "orders": new_data})
 
     async def broadcast_to_ticker(self, ticker: str, msg: dict):
         async with self.clients_lock:
@@ -142,13 +137,14 @@ class OrderBroadcaster(BaseBroadcaster):
 
         async with self.locks[ticker]:
             self.market_data[ticker].add_order(price, quantity, order_side)
+            new_snapshot = self.market_data[ticker].get_snapshot()
+
+        await self.broadcast_to_ticker(ticker, {"type": "batch", "orders": new_snapshot})
         await self.bus.publish(EventType.ORDER, {"order": db_order})
 
         await asyncio.gather(
             websocket.send(json.dumps(
                 {"type": "order_success", "message": "Order placed successfully"})),
-            self.broadcast_to_ticker(
-                ticker, {"type": "update", "order": order})
         )
 
     async def remove_client(self, websocket: ServerConnection):
