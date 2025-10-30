@@ -9,11 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 
+from engine_server.event_bus.event_bus import EventBus, EventType
+
 """
 This will have a bit of a funky design to it for now,
 this is so that if we need to switch over to C++ for the part
 of the code that needs to be performant, we can do so quite easily
 """
+
 
 class OrderBook:
     def __init__(self, instrument_symbol: str):
@@ -28,13 +31,15 @@ class OrderBook:
         (-Price, Time) - BID
         (Price, Time) - ASK
         """
-        key = (-o.price, o.created_at, o) if o.side == Side.BUY else (o.price, o.created_at, o)
+        key = (-o.price, o.created_at,
+               o) if o.side == Side.BUY else (o.price, o.created_at, o)
         heapq.heappush(self.bids if o.side == Side.BUY else self.asks, key)
 
     def pop_best(self, side: Side) -> Optional[Order]:
         heap = self.bids if side == Side.BUY else self.asks
 
-        if not heap: return None
+        if not heap:
+            return None
 
         _, _, o = heapq.heappop(heap)
 
@@ -46,16 +51,20 @@ class OrderBook:
 
         return bid, ask
 
+
 """
 3AM Soren having some neuron activation here--we'll probably want a quick way to peek the orderbook,
 knowing this, I'm going to define some quick cache for it. Also probably should remove the order wrapping
 """
+
+
 @dataclass
 class MarkSnapshot:
     best_bid: Optional[float] = None
     best_ask: Optional[float] = None
     last_trade: Optional[float] = None
     mark: Optional[float] = None
+
 
 class MatchingEngine:
 
@@ -64,9 +73,10 @@ class MatchingEngine:
     therefore, we should probably store them somewhere, and I've decided that that place is here
     """
 
-    def __init__(self):
+    def __init__(self, bus: EventBus):
         self.books: dict[str, OrderBook] = {}
         self._marks: dict[str, MarkSnapshot] = {}
+        self.bus = bus
         """
         Coarse async lock for cache updates, 
         could also be smart to do something for concurrent orders eventually
@@ -142,7 +152,7 @@ class MatchingEngine:
             if trades:
                 await self._on_trade(o.symbol, trades[-1].price)
 
-                #after trade, top-of-book may have shifted, so we'll recompute again
+                # after trade, top-of-book may have shifted, so we'll recompute again
                 await self._refresh_mark_from_book(o.symbol)
 
         return trades
@@ -159,7 +169,8 @@ class MatchingEngine:
             if not contra:
                 break
 
-            popped = book.pop_best(Side.SELL if mkt.side == Side.BUY else Side.BUY)
+            popped = book.pop_best(
+                Side.SELL if mkt.side == Side.BUY else Side.BUY)
             if popped is None:
                 break  # defensive
 
@@ -174,7 +185,8 @@ class MatchingEngine:
                 symbol=mkt.symbol,
                 buy_order_id=mkt.id if mkt.side == Side.BUY else popped.id,
                 sell_order_id=popped.id if mkt.side == Side.BUY else mkt.id,
-                price=trade_px, quantity=trade_qty, created_at=datetime.now(timezone.utc),
+                price=trade_px, quantity=trade_qty, created_at=datetime.now(
+                    timezone.utc),
             )
             db.add(t)
             trades.append(t)
@@ -188,12 +200,16 @@ class MatchingEngine:
             maker_rem_after = self._remaining(popped)
             popped.status = OrderStatus.FILLED if maker_rem_after == 0 else OrderStatus.PARTIAL
 
+            # Figure out exact payload
+            await self.bus.publish(EventType.TRADE, payload={})
+
             # requeue maker if it still has shares/contracts left
             if maker_rem_after > 0:
                 book.push(popped)
 
         # taker status after loop
-        mkt.status = OrderStatus.FILLED if self._remaining(mkt) == 0 else OrderStatus.PARTIAL
+        mkt.status = OrderStatus.FILLED if self._remaining(
+            mkt) == 0 else OrderStatus.PARTIAL
 
         await self._update_positions(trades, db)
 
@@ -241,8 +257,10 @@ class MatchingEngine:
             a.filled_quantity = (a.filled_quantity or 0) + qty
 
             # statuses
-            b.status = OrderStatus.FILLED if self._remaining(b) == 0 else OrderStatus.PARTIAL
-            a.status = OrderStatus.FILLED if self._remaining(a) == 0 else OrderStatus.PARTIAL
+            b.status = OrderStatus.FILLED if self._remaining(
+                b) == 0 else OrderStatus.PARTIAL
+            a.status = OrderStatus.FILLED if self._remaining(
+                a) == 0 else OrderStatus.PARTIAL
 
             # requeue any remainder
             if self._remaining(b) > 0:
