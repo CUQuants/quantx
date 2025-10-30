@@ -6,7 +6,6 @@ from typing import List
 from websockets.asyncio.server import ServerConnection
 from sqlalchemy.ext.asyncio import AsyncSession
 from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
-from services.engine_holder import engine_singleton
 from engine_server.event_bus.event_bus import EventBus, EventType
 from engine_server.broadcasters.broadcast_data import MarketDataSnapshot
 

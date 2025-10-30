@@ -5,6 +5,7 @@ from engine import MatchingEngine
 
 TICKERS = ["QNTX"]
 
+
 if __name__ == "__main__":
 
     event_bus = EventBus()
@@ -13,7 +14,15 @@ if __name__ == "__main__":
     broadcaster = OrderBroadcaster(host="localhost", port=67,
                                    auth_service=firebase_service, tickers=TICKERS, db_session=None, event_bus=event_bus)
 
-    event_bus.subscribe_event(EventType.ORDER, matching_engine.add_order)
-    event_bus.subscribe_event(EventType.TRADE, broadcaster.on_trade)
+    async def order_handler(payload: dict):
+        order = payload["order"]
+        db = payload["db"]
+        await matching_engine.add_order(order, db)
+
+    async def trade_handler(payload: dict):
+        await broadcaster.on_trade(payload)
+
+    event_bus.subscribe_event(EventType.ORDER, order_handler)
+    event_bus.subscribe_event(EventType.TRADE, trade_handler)
 
     broadcaster.start_server()
