@@ -59,6 +59,7 @@ class OrderBroadcaster(BaseBroadcaster):
             return None
 
     async def on_trade(self, msg):
+        # handle errors more gracefully late
         bid_price = msg.get("bid_price")
         ask_price = msg.get("ask_price")
         quantity = msg.get("amount_fulfilled")
@@ -125,21 +126,26 @@ class OrderBroadcaster(BaseBroadcaster):
                 return
             user_id = response.get("user_id", None)
 
-        ticker = "QNTX"
         quantity = order["quantity"]
-
-        order_side = order["type"]
-
-        order_side = Side.BUY if order_side == "buy" else Side.SELL
+        ticker = order["ticker"]
+        order_side = Side.BUY if order["type"] == "buy" else Side.SELL
         price = order["price"]
+
         # Create order object
         db_order = Order(symbol=ticker, account_id=user_id,
                          side=order_side, quantity=quantity, price=price)
         async with self.orders_lock:
+            self.market_data[ticker].add_order(price, quantity, order_side)
             await self.bus.publish(EventType.ORDER, {"order": db_order, "db": self.db_session})
 
         await asyncio.gather(
             websocket.send(json.dumps(
                 {"type": "order_success", "message": "Order placed successfully"})),
-            self.broadcast_message({"type": "update", "order": order})
+            self.broadcast_to_ticker(
+                ticker, {"type": "update", "order": order})
         )
+
+    async def remove_client(self, websocket: ServerConnection):
+        async with self.clients_lock:
+            for ticker in self.client_subscriptions:
+                self.client_subscriptions[ticker].remove(websocket)

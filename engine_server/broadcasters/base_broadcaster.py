@@ -24,7 +24,6 @@ class BaseBroadcaster(ABC):
 
         async with websockets.serve(self.handler, self.host, self.port):
             print("WebSocket server started on ws://localhost:8765")
-            asyncio.create_task(self.broadcast_periodic())
             await asyncio.Future()
 
     async def handler(self, websocket: ServerConnection):
@@ -42,19 +41,7 @@ class BaseBroadcaster(ABC):
         finally:
             print("Client disconnected")
             async with self.clients_lock:
-                self.clients.discard(websocket)
-
-    async def broadcast_periodic(self):
-        while True:
-            await asyncio.sleep(self.interval)
-            try:
-                message = await self.create_message()
-                print(message)
-            except Exception as e:
-                print(e)
-                message = {"error": e}
-
-            await self.broadcast_message(message)
+                await self.remove_client(websocket)
 
     async def broadcast_message(self, message: dict):
         async with self.clients_lock:
@@ -89,4 +76,8 @@ class BaseBroadcaster(ABC):
 
     @ abstractmethod
     def on_message(self, msg: dict, websocket: ServerConnection):
+        pass
+
+    @abstractmethod
+    async def remove_client(self, websocket: ServerConnection):
         pass
