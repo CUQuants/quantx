@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 from engine_server.event_bus.event_bus import EventBus, EventType
 from engine_server.broadcasters.broadcast_data import MarketDataSnapshot
+from datetime import datetime, timezone
 
 SNAPSHOT_LENGTH = 10
 
@@ -57,16 +58,21 @@ class OrderBroadcaster(BaseBroadcaster):
             return None
 
     async def on_trade(self, msg):
+
         # handle errors more gracefully late
         bid_price = msg.get("bid_price")
         ask_price = msg.get("ask_price")
-        quantity = msg.get("amount_fulfilled")
+        quantity = msg.get("quantity")
         ticker = msg.get("ticker")
 
         async with self.locks[ticker]:
-            ticker_data = self.market_data[ticker]
-            ticker_data.remove_order(bid_price, quantity, Side.BUY)
-            ticker_data.remove_order(ask_price, quantity, Side.SELL)
+            print("HELLO")
+            try:
+                ticker_data = self.market_data[ticker]
+                ticker_data.remove_order(bid_price, quantity, Side.BUY)
+                ticker_data.remove_order(ask_price, quantity, Side.SELL)
+            except Exception as e:
+                print(e)
 
         await self.broadcast_to_ticker(ticker, {
             "type": "trade",
@@ -89,7 +95,7 @@ class OrderBroadcaster(BaseBroadcaster):
                 print(f"Failed to send to client: {e}")
 
     async def on_message(self, msg: dict, websocket: ServerConnection):
-        message_type = msg.get("type", None)
+        message_type = msg.get("type")
 
         if not message_type:
             await self.send_error(websocket, "MISSING_TYPE", "A message type is required")
@@ -107,7 +113,7 @@ class OrderBroadcaster(BaseBroadcaster):
 
         if response.get("success", False) == False:
             error_type, error_message = response.get(
-                "error_code", None), response.get("error_message", None)
+                "error_code"), response.get("error_message")
             print(f"ERROR: {error_type}, {error_message}")
             await self.send_error(websocket, error_type, error_message)
             return
@@ -121,22 +127,22 @@ class OrderBroadcaster(BaseBroadcaster):
         else:
             price = order.get("price")
             if not price or price <= 0:
-                await websocket.send(json.dumps({"type": "error", "error_type": "VALUE_ERROR", "error_message": "Price must be positive"}))
+                await self.send_error(websocket, error_type="VALUE_ERROR", error_message="Price must be positive!")
                 return
-            user_id = response.get("user_id", None)
+            user_id = response.get("user_id")
 
         quantity = order["quantity"]
         ticker = order["ticker"]
-        order_side = Side.BUY if order["type"] == "buy" else Side.SELL
+        order_side = Side.BUY if order["type"] == "Buy" else Side.SELL
         price = order["price"]
 
         # Create order object
         db_order = Order(symbol=ticker, account_id=user_id,
-                         side=order_side, quantity=quantity, price=price)
+                         side=order_side, quantity=quantity, price=price, type=OrderType.LIMIT, filled_quantity=0, created_at=datetime.now(timezone.utc))
 
         async with self.locks[ticker]:
             self.market_data[ticker].add_order(price, quantity, order_side)
-            await self.bus.publish(EventType.ORDER, {"order": db_order})
+        await self.bus.publish(EventType.ORDER, {"order": db_order})
 
         await asyncio.gather(
             websocket.send(json.dumps(

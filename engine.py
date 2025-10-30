@@ -98,13 +98,16 @@ class MatchingEngine:
         Robust remaining: prefer Order.remaining_quantity if present,
         otherwise compute quantity - filled_quantity.
         """
+
         if hasattr(o, "remaining_quantity"):
             try:
                 return int(getattr(o, "remaining_quantity"))
             except Exception:
                 pass
+
         q = getattr(o, "quantity", 0) or 0
         f = getattr(o, "filled_quantity", 0) or 0
+
         return int(q - f)
 
     async def _refresh_mark_from_book(self, instrument_symbol: str):
@@ -201,6 +204,7 @@ class MatchingEngine:
             popped.status = OrderStatus.FILLED if maker_rem_after == 0 else OrderStatus.PARTIAL
 
             # Figure out exact payload
+
             await self.bus.publish(EventType.TRADE, payload={
                 "ticker": mkt.symbol,
                 "price": trade_px,
@@ -247,6 +251,7 @@ class MatchingEngine:
                 continue
 
             qty = min(b_rem, a_rem)
+
             # Trade at older order's price
             px = a.price if a.created_at <= b.created_at else b.price
 
@@ -255,16 +260,24 @@ class MatchingEngine:
                 buy_order_id=b.id, sell_order_id=a.id,
                 price=px, quantity=qty, created_at=datetime.now(timezone.utc),
             )
-            db.add(t)
+
+            # Fix db issue later
+            try:
+                db.add(t)
+            except Exception:
+                pass
+
             trades.append(t)
 
-            await self.bus.publish(EventType.TRADE, payload={
+            payload = {
                 "ticker": instrument_symbol,
                 "price": px,
                 "quantity": qty,
                 "bid_price": b.price,
                 "ask_price": a.price,
-            })
+            }
+
+            await self.bus.publish(EventType.TRADE, payload)
 
             # advance fills
             b.filled_quantity = (b.filled_quantity or 0) + qty
@@ -284,7 +297,6 @@ class MatchingEngine:
 
         if trades:
             await self._update_positions(trades, db)
-
         return trades
 
     async def _update_positions(self, trades: list[Trade], db: AsyncSession):
