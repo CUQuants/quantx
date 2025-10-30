@@ -9,16 +9,20 @@ from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 from engine_server.event_bus.event_bus import EventBus, EventType
 from engine_server.broadcasters.broadcast_data import MarketDataSnapshot
 
+SNAPSHOT_LENGTH = 10
+
 
 class OrderBroadcaster(BaseBroadcaster):
-    def __init__(self, host, port, interval: float, auth_service: AuthService, tickers: List[str], db_session: AsyncSession, bus: EventBus):
-        super().__init__(host, port, interval)
+
+    def __init__(self, host, port, auth_service: AuthService, tickers: List[str], db_session: AsyncSession, bus: EventBus):
+        super().__init__(host, port)
         self.auth_service = auth_service
         self.db_session = db_session
         self.tickers = tickers
         self.bus = bus
 
-        self.market_data = {ticker: MarketDataSnapshot() for ticker in tickers}
+        self.market_data = {ticker: MarketDataSnapshot(
+            ticker, SNAPSHOT_LENGTH) for ticker in tickers}
 
         self.client_subscriptions = {ticker: set() for ticker in tickers}
         self.locks = {ticker: asyncio.Lock() for ticker in tickers}
