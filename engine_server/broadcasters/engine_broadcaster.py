@@ -7,7 +7,8 @@ from websockets.asyncio.server import ServerConnection
 from sqlalchemy.ext.asyncio import AsyncSession
 from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 from services.engine_holder import engine_singleton
-from engine_server.event_bus.event_bus import EventBus
+from engine_server.event_bus.event_bus import EventBus, EventType
+from engine_server.broadcasters.broadcast_data import MarketDataSnapshot
 
 
 class OrderBroadcaster(BaseBroadcaster):
@@ -17,25 +18,75 @@ class OrderBroadcaster(BaseBroadcaster):
         self.price_upper_bound = price_upper_bound
         self.auth_service = auth_service
         self.db_session = db_session
+        self.tickers = tickers
+        self.bus = bus
 
+        self.market_data = {ticker: MarketDataSnapshot() for ticker in tickers}
+
+        self.client_subscriptions = {ticker: set() for ticker in tickers}
         self.locks = {ticker: asyncio.Lock() for ticker in tickers}
 
         self.orders_lock = asyncio.Lock()
 
-    def create_ticker_map(self, tickers: List[str]):
-        ticker_map = {}
-        for ticker in tickers:
-            ticker_map[ticker] = {"bids": {}, "asks": {}}
-        return ticker_map
-
     async def create_message(self):
-        pass
-
-    async def initial_connection_action(self, client: ServerConnection):
         pass
 
     async def create_batch_message(self):
         pass
+
+    async def initial_connection_action(self, client: ServerConnection):
+        ticker = self.extract_ticker(client)
+        if not ticker:
+            await self.send_error(client, "ROOM_ERROR", "Ticker string not provided!")
+        elif ticker not in self.client_subscriptions:
+            await self.send_error(client, "INVALID_TICKER", f"Ticker: {ticker} is invalid")
+        else:
+            async with self.clients_lock:
+                self.client_subscriptions[ticker].add(client)
+            async with self.locks[ticker]:
+                ticker_data = self.market_data.get(ticker)
+                initial_snapshot = ticker_data.get_snapshot()
+                message = {"type": "snapshot", "orders": initial_snapshot}
+            await client.send(json.dumps(message))
+
+    def extract_ticker(self, client: ServerConnection):
+        try:
+            raw_url = client.request.path
+            ticker = raw_url.split("/")[-1].upper()
+            return ticker
+        except Exception as e:
+            print(e)
+            return None
+
+    async def on_trade(self, msg):
+        bid_price = msg.get("bid_price")
+        ask_price = msg.get("ask_price")
+        quantity = msg.get("amount_fulfilled")
+        ticker = msg.get("ticker")
+
+        async with self.locks[ticker]:
+            ticker_data = self.market_data[ticker]
+            ticker_data.remove_order(bid_price, quantity, Side.BUY)
+            ticker_data.remove_order(ask_price, quantity, Side.SELL)
+
+        await self.broadcast_to_ticker(ticker, {
+            "type": "trade",
+            "price": ask_price,
+            "quantity": quantity
+        })
+
+    async def broadcast_to_ticker(self, ticker: str, msg: dict):
+        async with self.clients_lock:
+            clients = list(self.client_subscriptions[ticker])
+
+        message = json.loads(msg)
+
+        for client in clients:
+            try:
+                await client.send(message)
+            except Exception as e:
+                # Handle logic for discarding dead clients later
+                print(f"Failed to send to client: {e}")
 
     async def on_message(self, msg: dict, websocket: ServerConnection):
         message_type = msg.get("type", None)
@@ -46,6 +97,7 @@ class OrderBroadcaster(BaseBroadcaster):
 
         elif message_type == "order":
             await self.handle_order(websocket, msg)
+
         else:
             await self.send_error(websocket, "INVALID_MESSAGE_TYPE", "Message type is invalid")
 
@@ -84,7 +136,7 @@ class OrderBroadcaster(BaseBroadcaster):
         db_order = Order(symbol=ticker, account_id=user_id,
                          side=order_side, quantity=quantity, price=price)
         async with self.orders_lock:
-            await engine_singleton().add_order(db_order, self.db_session)
+            await self.bus.publish(EventType.ORDER, {"order": db_order, "db": self.db_session})
 
         await asyncio.gather(
             websocket.send(json.dumps(
