@@ -201,7 +201,13 @@ class MatchingEngine:
             popped.status = OrderStatus.FILLED if maker_rem_after == 0 else OrderStatus.PARTIAL
 
             # Figure out exact payload
-            await self.bus.publish(EventType.TRADE, payload={})
+            await self.bus.publish(EventType.TRADE, payload={
+                "ticker": mkt.symbol,
+                "price": trade_px,
+                "quantity": trade_qty,
+                "bid_price": bid.price if mkt.side == Side.SELL else None,
+                "ask_price": ask.price if mkt.side == Side.BUY else None,
+            })
 
             # requeue maker if it still has shares/contracts left
             if maker_rem_after > 0:
@@ -251,6 +257,14 @@ class MatchingEngine:
             )
             db.add(t)
             trades.append(t)
+
+            await self.bus.publish(EventType.TRADE, payload={
+                "ticker": instrument_symbol,
+                "price": px,
+                "quantity": qty,
+                "bid_price": b.price,
+                "ask_price": a.price,
+            })
 
             # advance fills
             b.filled_quantity = (b.filled_quantity or 0) + qty

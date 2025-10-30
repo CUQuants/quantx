@@ -26,8 +26,6 @@ class OrderBroadcaster(BaseBroadcaster):
         self.client_subscriptions = {ticker: set() for ticker in tickers}
         self.locks = {ticker: asyncio.Lock() for ticker in tickers}
 
-        self.orders_lock = asyncio.Lock()
-
     async def create_message(self):
         pass
 
@@ -80,11 +78,11 @@ class OrderBroadcaster(BaseBroadcaster):
         async with self.clients_lock:
             clients = list(self.client_subscriptions[ticker])
 
-        message = json.loads(msg)
+        payload = json.dumps(msg)
 
         for client in clients:
             try:
-                await client.send(message)
+                await client.send(payload)
             except Exception as e:
                 # Handle logic for discarding dead clients later
                 print(f"Failed to send to client: {e}")
@@ -121,7 +119,7 @@ class OrderBroadcaster(BaseBroadcaster):
 
         else:
             price = order.get("price")
-            if price <= 0:
+            if not price or price <= 0:
                 await websocket.send(json.dumps({"type": "error", "error_type": "VALUE_ERROR", "error_message": "Price must be positive"}))
                 return
             user_id = response.get("user_id", None)
@@ -134,7 +132,7 @@ class OrderBroadcaster(BaseBroadcaster):
         # Create order object
         db_order = Order(symbol=ticker, account_id=user_id,
                          side=order_side, quantity=quantity, price=price)
-        async with self.orders_lock:
+        async with self.locks[ticker]:
             self.market_data[ticker].add_order(price, quantity, order_side)
             await self.bus.publish(EventType.ORDER, {"order": db_order})
 
@@ -148,4 +146,4 @@ class OrderBroadcaster(BaseBroadcaster):
     async def remove_client(self, websocket: ServerConnection):
         async with self.clients_lock:
             for ticker in self.client_subscriptions:
-                self.client_subscriptions[ticker].remove(websocket)
+                self.client_subscriptions[ticker].discard(websocket)
