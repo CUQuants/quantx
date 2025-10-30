@@ -14,10 +14,9 @@ SNAPSHOT_LENGTH = 10
 
 class OrderBroadcaster(BaseBroadcaster):
 
-    def __init__(self, host, port, auth_service: AuthService, tickers: List[str], db_session: AsyncSession, bus: EventBus):
+    def __init__(self, host, port, auth_service: AuthService, tickers: List[str], bus: EventBus):
         super().__init__(host, port)
         self.auth_service = auth_service
-        self.db_session = db_session
         self.tickers = tickers
         self.bus = bus
 
@@ -137,7 +136,7 @@ class OrderBroadcaster(BaseBroadcaster):
                          side=order_side, quantity=quantity, price=price)
         async with self.orders_lock:
             self.market_data[ticker].add_order(price, quantity, order_side)
-            await self.bus.publish(EventType.ORDER, {"order": db_order, "db": self.db_session})
+            await self.bus.publish(EventType.ORDER, {"order": db_order})
 
         await asyncio.gather(
             websocket.send(json.dumps(

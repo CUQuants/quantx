@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     async def order_handler(payload: dict):
         order = payload["order"]
-        db = payload["db"]
+        db = get_session()
         await matching_engine.add_order(order, db)
 
     async def trade_handler(payload: dict):
