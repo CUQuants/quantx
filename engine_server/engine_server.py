@@ -14,7 +14,7 @@ if __name__ == "__main__":
     matching_engine = MatchingEngine(event_bus)
     firebase_service = FirebaseAuth()
     broadcaster = OrderBroadcaster(host="localhost", port=8765,
-                                   auth_service=firebase_service, tickers=TICKERS, db_session=None, bus=event_bus)
+                                   auth_service=firebase_service, tickers=TICKERS, bus=event_bus)
 
     async def order_handler(payload: dict):
         order = payload["order"]

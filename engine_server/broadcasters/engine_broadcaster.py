@@ -44,7 +44,7 @@ class OrderBroadcaster(BaseBroadcaster):
             async with self.locks[ticker]:
                 ticker_data = self.market_data.get(ticker)
                 initial_snapshot = ticker_data.get_snapshot()
-                message = {"type": "snapshot", "orders": initial_snapshot}
+                message = {"type": "batch", "orders": initial_snapshot}
             await client.send(json.dumps(message))
 
     def extract_ticker(self, client: ServerConnection):
@@ -82,6 +82,7 @@ class OrderBroadcaster(BaseBroadcaster):
 
         for client in clients:
             try:
+                print(payload)
                 await client.send(payload)
             except Exception as e:
                 # Handle logic for discarding dead clients later
@@ -132,6 +133,7 @@ class OrderBroadcaster(BaseBroadcaster):
         # Create order object
         db_order = Order(symbol=ticker, account_id=user_id,
                          side=order_side, quantity=quantity, price=price)
+
         async with self.locks[ticker]:
             self.market_data[ticker].add_order(price, quantity, order_side)
             await self.bus.publish(EventType.ORDER, {"order": db_order})

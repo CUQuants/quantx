@@ -29,18 +29,20 @@ class BaseBroadcaster(ABC):
 
         async with self.clients_lock:
             self.clients.add(websocket)
+            print("client added!")
         await self.initial_connection_action(client=websocket)
 
         try:
             async for raw in websocket:
                 msg = json.loads(raw)
                 await self.on_message(msg, websocket)
-        except websockets.exceptions.ConnectionClosed:
-            pass
+        except websockets.exceptions.ConnectionClosed as e:
+            print("CONNECTION_CLOSED", e)
+        except Exception as e:
+            print("ERROR: ", e)
         finally:
-            print("Client disconnected")
-            async with self.clients_lock:
-                await self.remove_client(websocket)
+            print("client removed!")
+            await self.remove_client(websocket)
 
     async def broadcast_message(self, message: dict):
         async with self.clients_lock:
