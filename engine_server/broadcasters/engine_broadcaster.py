@@ -84,7 +84,6 @@ class OrderBroadcaster(BaseBroadcaster):
 
         for client in clients:
             try:
-                print(payload)
                 await client.send(payload)
             except Exception as e:
                 # Handle logic for discarding dead clients later
