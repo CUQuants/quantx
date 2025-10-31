@@ -59,11 +59,12 @@ class OrderBroadcaster(BaseBroadcaster):
 
     async def on_trade(self, msg):
 
-        # handle errors more gracefully late
+        # handle errors more gracefully later
         bid_price = msg.get("bid_price")
         ask_price = msg.get("ask_price")
         quantity = msg.get("quantity")
         ticker = msg.get("ticker")
+        price = msg.get("price")
 
         async with self.locks[ticker]:
             try:
@@ -73,7 +74,7 @@ class OrderBroadcaster(BaseBroadcaster):
                 new_data = ticker_data.get_snapshot()
             except Exception as e:
                 print(e)
-        await self.broadcast_to_ticker(ticker, {"type": "batch", "orders": new_data})
+        await self.broadcast_to_ticker(ticker, {"type": "batch", "orders": new_data, "last_trade": price})
 
     async def broadcast_to_ticker(self, ticker: str, msg: dict):
         async with self.clients_lock:

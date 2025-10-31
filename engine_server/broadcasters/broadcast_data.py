@@ -18,6 +18,8 @@ class MarketDataSnapshot:
         self.ticker = ticker
         self.bids: SortedDict = SortedDict(lambda x: -x)
         self.asks: SortedDict = SortedDict()
+        self.total_bids = 0
+        self.total_asks = 0
 
     def remove_order(self, price: float, amount_fulfilled: int, side: OrderSide) -> None:
 
@@ -30,6 +32,11 @@ class MarketDataSnapshot:
             raise ValueError(
                 f"Insufficient quantity at {price}: {book[price]} < {amount_fulfilled}")
 
+        if side == OrderSide.BUY:
+            self.total_bids -= amount_fulfilled
+        else:
+            self.total_asks -= amount_fulfilled
+
         book[price] -= amount_fulfilled
         if book[price] <= 0:
             book.pop(price)
@@ -39,6 +46,12 @@ class MarketDataSnapshot:
         book = self.bids if side == OrderSide.BUY else self.asks
         if price not in book:
             book[price] = 0
+
+        if side == OrderSide.BUY:
+            self.total_bids += quantity
+        else:
+            self.total_asks += quantity
+
         book[price] += quantity
 
     def get_best_bid(self) -> None | tuple[float, int]:
@@ -61,5 +74,7 @@ class MarketDataSnapshot:
     def get_snapshot(self):
         return {
             "bids": self.get_top_book(OrderSide.BUY),
-            "asks": self.get_top_book(OrderSide.SELL)
+            "asks": self.get_top_book(OrderSide.SELL),
+            "total_bids": self.total_bids,
+            "total_asks": self.total_asks
         }
