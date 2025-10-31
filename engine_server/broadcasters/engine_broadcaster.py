@@ -86,7 +86,7 @@ class OrderBroadcaster(BaseBroadcaster):
             try:
                 await client.send(payload)
             except Exception as e:
-                # Handle logic for discarding dead clients later
+                await self.remove_client(client)
                 print(f"Failed to send to client: {e}")
 
     async def on_message(self, msg: dict, websocket: ServerConnection):
