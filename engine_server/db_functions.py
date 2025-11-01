@@ -10,7 +10,11 @@ class OrderValidationError(Exception):
     pass
 
 
-async def add_db_order(order: Order, session: AsyncSession):
+async def add_db_order(order: Order, email: str, firebase_uid: str, session: AsyncSession):
+    account = await _get_account_firebase_uid(session, firebase_uid, email)
+
+    await validate_order(session, order, account)
+    order.account_id = account.id
     session.add(order)
     await session.flush()
     await session.refresh(order)
@@ -67,10 +71,35 @@ async def get_position(account_id: int, symbol: str, session: AsyncSession, side
 async def get_account(session: AsyncSession, account_id: int) -> Account:
     account_result = await session.execute(select(Account).where(Account.id == account_id))
     account = account_result.scalar_one_or_none()
+
     return account
 
 
-async def validate_order(session: AsyncSession, price: float, side: OrderSide, symbol: str, quantity: int, account_id) -> dict:
+async def _get_account_firebase_uid(session: AsyncSession, firebase_uid, email) -> Account:
+    account_result = await session.execute(select(Account).where(Account.firebase_uid == firebase_uid))
+    account = account_result.scalar_one_or_none()
+
+    if account:
+        return account
+    else:
+        new_account = await _create_db_account(firebase_uid, email, session)
+        return new_account
+
+
+async def _create_db_account(firebase_uid: str, email: str, session: AsyncSession) -> Account:
+
+    new_account = Account(firebase_uid=firebase_uid, username=email)
+
+    session.add(new_account)
+
+    await session.flush()
+
+    await session.refresh(new_account)
+
+    return new_account
+
+
+async def validate_order(session: AsyncSession, order: Order, account: Account) -> None:
     """
     For the functionality of this engine, we will choose to validate the order in the following ways.
 
@@ -80,22 +109,23 @@ async def validate_order(session: AsyncSession, price: float, side: OrderSide, s
     - For a SELL order, if a user doesn't have a position, or the position size is less than the quantity of the order
     - If a user has an order that could possibly match with the incoming order
     """
-    if quantity <= 0:
+    if order.quantity <= 0:
         raise OrderValidationError("Quantity must be positive")
 
-    if price is None or price <= 0:
+    if order.price is None or order.price <= 0:
         raise OrderValidationError("Orders require positive price")
 
-    if side == OrderSide.BUY:
-        account = await get_account(session, account_id)
-        if account.balance < price*quantity:
+    if order.side == OrderSide.BUY:
+
+        if account.balance < order.price*order.quantity:
             raise OrderValidationError(
                 "Not enough account balance to execute order!")
 
     else:
-        position = await get_position(account_id, symbol, session)
-        if position and position.quantity < quantity:
+        position = await get_position(account.id, order.symbol, session, order.side)
+        # if not position:
+        #     raise OrderValidationError(
+        #         "Invalid position! Unable to execute this sell order")
+        if position and position.quantity < order.quantity:
             raise OrderValidationError(
                 "Position size is not enough to execute sell order")
-
-    # Check to see if another order will match

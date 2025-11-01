@@ -9,6 +9,8 @@ from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 from engine_server.event_bus.event_bus import EventBus, EventType
 from engine_server.broadcasters.broadcast_data import MarketDataSnapshot
 from datetime import datetime, timezone
+from engine_server.db_functions import validate_order, add_db_order
+from engine_server.db_session import SessionFactory
 
 SNAPSHOT_LENGTH = 10
 
@@ -114,26 +116,28 @@ class OrderBroadcaster(BaseBroadcaster):
             return
 
         order = msg.get("order", None)
+        side = order_side = Side.BUY if order["type"] == "Buy" else Side.SELL
 
-        if not order:
-            await self.send_error(websocket, "NO_ORDER", "Order field must be present")
-            return
+        user_id = response.get("user_id")
+        email = response.get("email")
 
-        else:
-            price = order.get("price")
-            if not price or price <= 0:
-                await self.send_error(websocket, error_type="VALUE_ERROR", error_message="Price must be positive!")
+        quantity = order.get("quantity")
+        ticker = order.get("ticker")
+        price = order.get("price")
+
+        async with SessionFactory() as session:
+            try:
+                async with session.begin():
+                    order_object = Order(symbol=ticker, account_id=user_id,
+                                         side=side, quantity=quantity, price=price, type=OrderType.LIMIT, filled_quantity=0, created_at=datetime.now(timezone.utc))
+
+                    db_order = await add_db_order(order_object, email, user_id, session)
+            except Exception as e:
+                print(e)
+                await self.send_error(websocket, "ORDER_VALIDATION_ERROR", str(e))
                 return
-            user_id = response.get("user_id")
-
-        quantity = order["quantity"]
-        ticker = order["ticker"]
-        order_side = Side.BUY if order["type"] == "Buy" else Side.SELL
-        price = order["price"]
 
         # Create order object
-        db_order = Order(symbol=ticker, account_id=user_id,
-                         side=order_side, quantity=quantity, price=price, type=OrderType.LIMIT, filled_quantity=0, created_at=datetime.now(timezone.utc))
 
         async with self.locks[ticker]:
             self.market_data[ticker].add_order(price, quantity, order_side)

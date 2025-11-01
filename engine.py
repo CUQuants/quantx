@@ -134,6 +134,7 @@ class MatchingEngine:
         return self._marks.get(instrument_symbol, MarkSnapshot())
 
     async def add_order(self, o: Order, db: AsyncSession):
+
         book = self.get_book(o.symbol)
         trades: list[Trade] = []
 
@@ -259,12 +260,15 @@ class MatchingEngine:
                 symbol=instrument_symbol,
                 buy_order_id=b.id, sell_order_id=a.id,
                 price=px, quantity=qty, created_at=datetime.now(timezone.utc),
+                sell_account_id=a.account_id, buy_account_id=b.account_id,
+                trade_value=px*qty
             )
 
             # Fix db issue later
             try:
                 db.add(t)
-            except Exception:
+            except Exception as e:
+                print("FAILED TO ADD TO DATABASE: ", e)
                 pass
 
             trades.append(t)
@@ -303,4 +307,11 @@ class MatchingEngine:
         """
         Yeah sorry guys I'm not writing this shit rn
         """
+
+        # for trade in trades:
+        #     seller_account = trade.sell_order.account
+        #     buyer_account = trade.buy_order.account
+
+        #     # update positions, then adjust balance in accounts
+
         pass
