@@ -99,8 +99,12 @@ class Trade(Base):
         "orders.id", ondelete="CASCADE"), nullable=False, index=True)
     sell_order_id: Mapped[str] = mapped_column(ForeignKey(
         "orders.id", ondelete="CASCADE"), nullable=False, index=True)
-    account_id: Mapped[int] = mapped_column(ForeignKey(
+
+    buy_account_id: Mapped[int] = mapped_column(ForeignKey(
         "accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    sell_account_id: Mapped[int] = mapped_column(ForeignKey(
+        "accounts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     symbol: Mapped[str] = mapped_column(String, default="CQAF", index=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -125,11 +129,19 @@ class Trade(Base):
         lazy="selectin",
     )
 
-    account: Mapped["Account"] = relationship(
+    buy_account: Mapped["Account"] = relationship(
         "Account",
-        primaryjoin="Account.id == foreign(Trade.account_id)",
-        foreign_keys="[Trade.account_id]",
-        back_populates="trades",
+        primaryjoin="Account.id == foreign(Trade.buy_account_id)",
+        foreign_keys="[Trade.buy_account_id]",
+        back_populates="buy_trades",
+        lazy="selectin",
+    )
+
+    sell_account: Mapped["Account"] = relationship(
+        "Account",
+        primaryjoin="Account.id == foreign(Trade.sell_account_id)",
+        foreign_keys="[Trade.sell_account_id]",
+        back_populates="sell_trades",
         lazy="selectin",
     )
 

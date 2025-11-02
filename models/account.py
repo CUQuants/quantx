@@ -26,12 +26,13 @@ class Account(Base):
     firebase_uid: Mapped[Optional[str]] = mapped_column(
         String, unique=True, index=True, nullable=True)
     balance: Mapped[float] = mapped_column(Float, default=1000.0)
-    role: Mapped[AccountRole] = mapped_column(sqlalchemy.Enum(AccountRole))
+    role: Mapped[AccountRole] = mapped_column(
+        sqlalchemy.Enum(AccountRole), default=AccountRole.USER)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now(timezone.utc))
     last_login_at: Mapped[Optional[datetime]
-                          ] = mapped_column(DateTime, nullable=True)
+                          ] = mapped_column(DateTime, nullable=True, default=datetime.now(timezone.utc))
 
     orders: Mapped[list["Order"]] = relationship(
         "Order",
@@ -42,13 +43,22 @@ class Account(Base):
         primaryjoin="Account.id == foreign(Order.account_id)",
     )
 
-    trades: Mapped[list["Trade"]] = relationship(
+    sell_trades: Mapped[list["Trade"]] = relationship(
         "Trade",
-        back_populates="account",
+        back_populates="sell_account",
         cascade="all, delete-orphan",
         passive_deletes=True,  # keep only if Trade.account_id has ondelete="CASCADE"
         lazy="selectin",
-        primaryjoin="Account.id == foreign(Trade.account_id)",
+        primaryjoin="Account.id == foreign(Trade.sell_account_id)",
+    )
+
+    buy_trades: Mapped[list["Trade"]] = relationship(
+        "Trade",
+        back_populates="buy_account",
+        cascade="all, delete-orphan",
+        passive_deletes=True,  # keep only if Trade.account_id has ondelete="CASCADE"
+        lazy="selectin",
+        primaryjoin="Account.id == foreign(Trade.buy_account_id)",
     )
 
     positions: Mapped[list["Position"]] = relationship(

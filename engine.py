@@ -11,6 +11,8 @@ from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 
 from engine_server.event_bus.event_bus import EventBus, EventType
 
+from engine_server.db_functions import handle_trade
+
 """
 This will have a bit of a funky design to it for now,
 this is so that if we need to switch over to C++ for the part
@@ -265,11 +267,11 @@ class MatchingEngine:
             )
 
             # Fix db issue later
-            try:
-                db.add(t)
-            except Exception as e:
-                print("FAILED TO ADD TO DATABASE: ", e)
-                pass
+            # try:
+            #     db.add(t)
+            # except Exception as e:
+            #     print("FAILED TO ADD TO DATABASE: ", e)
+            #     pass
 
             trades.append(t)
 
@@ -303,15 +305,10 @@ class MatchingEngine:
             await self._update_positions(trades, db)
         return trades
 
-    async def _update_positions(self, trades: list[Trade], db: AsyncSession):
+    async def _update_positions(self, trades: list[Trade], session: AsyncSession):
         """
         Yeah sorry guys I'm not writing this shit rn
         """
 
-        # for trade in trades:
-        #     seller_account = trade.sell_order.account
-        #     buyer_account = trade.buy_order.account
-
-        #     # update positions, then adjust balance in accounts
-
-        pass
+        for trade in trades:
+            await handle_trade(trade, session)

@@ -21,24 +21,24 @@ async def add_db_order(order: Order, email: str, firebase_uid: str, session: Asy
     return order
 
 
-async def handle_trade(trade: Trade, session: AsyncSession):
+async def handle_trade(trade: Trade, session: AsyncSession) -> None:
     session.add(trade)
 
-    await update_account_balances(trade, session)
-    await update_positions(trade, session)
+    buyer_account: Account = await session.get(Account, trade.buy_account_id)
+    seller_account: Account = await session.get(Account, trade.sell_account_id)
+    await update_account_balances(trade, session, buyer_account, seller_account)
+    await update_positions(trade, session, buyer_account, seller_account)
+
+    await session.flush()
 
 
-async def update_account_balances(trade: Trade, session: AsyncSession):
-    buyer_account: Account = trade.buy_order.account
-    seller_account: Account = trade.sell_order.account
+async def update_account_balances(trade: Trade, session: AsyncSession, buyer_account: Account, seller_account: Account):
 
     buyer_account.balance -= trade.price*trade.quantity
     seller_account.balance += trade.price*trade.quantity
 
 
-async def update_positions(trade: Trade, session: AsyncSession):
-    buyer_account: Account = trade.buy_order.account
-    seller_account: Account = trade.sell_order.account
+async def update_positions(trade: Trade, session: AsyncSession, buyer_account: Account, seller_account: Account):
 
     seller_position = await get_position(seller_account.id, trade.symbol, session)
     buyer_position = await get_position(buyer_account.id, trade.symbol, session)
@@ -47,7 +47,7 @@ async def update_positions(trade: Trade, session: AsyncSession):
         # fill in pnl later
         new_position = Position(
             symbol=trade.symbol, quantity=trade.quantity, account_id=buyer_account.id, average_price=trade.price)
-        await session.add(new_position)
+        session.add(new_position)
 
     else:
         new_average = ((buyer_position.quantity * buyer_position.average_price) +
@@ -62,7 +62,7 @@ async def update_positions(trade: Trade, session: AsyncSession):
             await session.execute(delete(Position).where(Position.id == seller_position.id))
 
 
-async def get_position(account_id: int, symbol: str, session: AsyncSession, side: OrderSide) -> Position:
+async def get_position(account_id: int, symbol: str, session: AsyncSession) -> Position:
     pos_result = await session.execute(select(Position).where(Position.account_id == account_id).where(Position.symbol == symbol))
     position = pos_result.scalar_one_or_none()
     return position
@@ -122,7 +122,7 @@ async def validate_order(session: AsyncSession, order: Order, account: Account) 
                 "Not enough account balance to execute order!")
 
     else:
-        position = await get_position(account.id, order.symbol, session, order.side)
+        position = await get_position(account.id, order.symbol, session)
         # if not position:
         #     raise OrderValidationError(
         #         "Invalid position! Unable to execute this sell order")

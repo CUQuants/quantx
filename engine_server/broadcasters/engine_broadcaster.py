@@ -9,7 +9,7 @@ from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 from engine_server.event_bus.event_bus import EventBus, EventType
 from engine_server.broadcasters.broadcast_data import MarketDataSnapshot
 from datetime import datetime, timezone
-from engine_server.db_functions import validate_order, add_db_order
+from engine_server.db_functions import add_db_order
 from engine_server.db_session import SessionFactory
 
 SNAPSHOT_LENGTH = 10

@@ -18,8 +18,8 @@ class FirebaseAuth(AuthService):
 
     def validate_token(self, token) -> dict:
 
-        if token == "BOT_TOKEN":
-            return {"success": True, "user_id": "BOT_ID", "decoded_email": "bot@cuquants.com"}
+        if token[:-1] == "BOT_TOKEN":
+            return {"success": True, "user_id": f"BOT_ID{token[-1]}", "email": f"bot{token[-1]}@cuquants.com"}
 
         try:
 
