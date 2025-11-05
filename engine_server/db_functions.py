@@ -15,6 +15,7 @@ async def add_db_order(order: Order, email: str, firebase_uid: str, session: Asy
 
     await validate_order(session, order, account)
     order.account_id = account.id
+    account.available_cash -= order.price * order.quantity
     session.add(order)
     await session.flush()
     await session.refresh(order)
@@ -29,6 +30,8 @@ async def handle_trade(trade: Trade, session: AsyncSession) -> None:
     await update_account_balances(trade, session, buyer_account, seller_account)
     await update_positions(trade, session, buyer_account, seller_account)
 
+    print(buyer_account.balance)
+
     await session.flush()
 
 
@@ -36,6 +39,7 @@ async def update_account_balances(trade: Trade, session: AsyncSession, buyer_acc
 
     buyer_account.balance -= trade.price*trade.quantity
     seller_account.balance += trade.price*trade.quantity
+    seller_account.available_cash += trade.price*trade.quantity
 
 
 async def update_positions(trade: Trade, session: AsyncSession, buyer_account: Account, seller_account: Account):
@@ -117,7 +121,7 @@ async def validate_order(session: AsyncSession, order: Order, account: Account) 
 
     if order.side == OrderSide.BUY:
 
-        if account.balance < order.price*order.quantity:
+        if account.available_cash < order.price*order.quantity:
             raise OrderValidationError(
                 "Not enough account balance to execute order!")
 

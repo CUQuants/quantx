@@ -26,6 +26,7 @@ class Account(Base):
     firebase_uid: Mapped[Optional[str]] = mapped_column(
         String, unique=True, index=True, nullable=True)
     balance: Mapped[float] = mapped_column(Float, default=1000.0)
+    available_cash: Mapped[float] = mapped_column(Float, default=1000.0)
     role: Mapped[AccountRole] = mapped_column(
         sqlalchemy.Enum(AccountRole), default=AccountRole.USER)
 
