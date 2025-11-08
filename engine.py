@@ -12,7 +12,7 @@ from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 
 from api.socket_service.event_bus import EventBus, EventType
 
-from engine_server.db_functions import handle_trade
+from engine_server.db_functions import handle_trade, get_all_orders
 
 """
 This will have a bit of a funky design to it for now,
@@ -26,6 +26,17 @@ class OrderBook:
         self.instrument_symbol = instrument_symbol
         self.bids = []
         self.asks = []
+
+    async def get_or_create(self, session: AsyncSession):
+        """
+        This function is meant to ensure consistency between the database and the engine.
+        The main source of truth should be the database, so if the book is empty, it will query the database for all orders that are either partially fulfilled or pending
+        """
+        if len(self.bids) == 0 and len(self.asks) == 0:
+            all_orders = await get_all_orders(session, self.instrument_symbol)
+            for i in range(len(all_orders)):
+                self.push(all_orders[i])
+        return self
 
     def push(self, o: Order):
         """
@@ -86,15 +97,15 @@ class MatchingEngine:
         """
         self._lock = Lock()
 
-    def get_book(self, instrument_symbol: str) -> OrderBook:
+    async def get_book(self, instrument_symbol: str, session: AsyncSession) -> OrderBook:
         if instrument_symbol not in self.books:
             new_book = OrderBook(instrument_symbol)
             self._marks[instrument_symbol] = MarkSnapshot()
             self.books[instrument_symbol] = new_book
 
-            return new_book
-
-        return self.books[instrument_symbol]
+        book = await self.books[instrument_symbol].get_or_create(session)
+        print(book.asks)
+        return book
 
     def _remaining(self, o: Order) -> int:
         """
@@ -138,7 +149,7 @@ class MatchingEngine:
 
     async def add_order(self, o: Order, db: AsyncSession):
 
-        book = self.get_book(o.symbol)
+        book = await self.get_book(o.symbol, db)
         trades: list[Trade] = []
 
         # Market orders consume immediately
@@ -166,7 +177,7 @@ class MatchingEngine:
 
     async def _execute_market(self, mkt: Order, db: AsyncSession):
         trades: list[Trade] = []
-        book = self.get_book(mkt.symbol)
+        book = await self.get_book(mkt.symbol, db)
 
         remaining = self._remaining(mkt)
 
@@ -236,7 +247,7 @@ class MatchingEngine:
 
     async def _cross(self, instrument_symbol: str, db: AsyncSession):
         trades: list[Trade] = []
-        book = self.get_book(instrument_symbol)
+        book = await self.get_book(instrument_symbol, db)
 
         while True:
             bid, ask = book.best()
@@ -303,7 +314,6 @@ class MatchingEngine:
         """
         Yeah sorry guys I'm not writing this shit rn
         """
-
         for o in orders:
             state = inspect(o)
         if state.transient:
