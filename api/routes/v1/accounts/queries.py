@@ -31,7 +31,7 @@ get_full_account_by_id: Callable[[int], Select] = \
 )
 
 get_orders_by_account_id: Callable[[int], Select] = \
-    lambda account_id: select(Order).where(Account.id == account_id)
+    lambda account_id: select(Order).where(Order.account_id == account_id)
 
 get_trades_by_account_id: Callable[[int], Select] = \
     lambda account_id: select(Trade).where(

@@ -6,6 +6,7 @@ from typing import Optional
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import inspect
 
 from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 
@@ -266,13 +267,6 @@ class MatchingEngine:
                 trade_value=px*qty
             )
 
-            # Fix db issue later
-            # try:
-            #     db.add(t)
-            # except Exception as e:
-            #     print("FAILED TO ADD TO DATABASE: ", e)
-            #     pass
-
             trades.append(t)
 
             payload = {
@@ -302,13 +296,20 @@ class MatchingEngine:
                 book.push(a)
 
         if trades:
-            await self._update_positions(trades, db)
+            await self._update_positions(trades, db, [b, a])
         return trades
 
-    async def _update_positions(self, trades: list[Trade], session: AsyncSession):
+    async def _update_positions(self, trades: list[Trade], session: AsyncSession, orders: list[Order]):
         """
         Yeah sorry guys I'm not writing this shit rn
         """
+
+        for o in orders:
+            state = inspect(o)
+        if state.transient:
+            session.add(o)
+        elif state.detached:
+            await session.merge(o)
 
         for trade in trades:
             await handle_trade(trade, session)
