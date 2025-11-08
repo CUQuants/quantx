@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 from api.db import init_models, SessionFactory
 from api.routes.main_router import all_routes
@@ -10,6 +11,12 @@ from engine import MatchingEngine
 from engine_server.auth.firebase_auth_service import FirebaseAuth
 from api.socket_service.engine_broadcaster import OrderBroadcaster
 from api.socket_service.adapters import ServerConnectionAdapter
+
+
+"""
+To run:
+uvicorn api.main:app --reload --port 8000
+"""
 
 
 class UnifiedService:
@@ -50,6 +57,14 @@ app = FastAPI(
 )
 
 app.include_router(all_routes, prefix="/api")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.websocket("/ws/{ticker}")

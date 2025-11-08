@@ -36,8 +36,10 @@ def apply_time_symbol_filters(
     symbol_col: Optional[ColumnElement] = None,
     symbol: Optional[str] = None,
 ) -> Select:
-    stmt = where_if(stmt, after,  ts_col >= after)
-    stmt = where_if(stmt, before, ts_col < before)
+    if after:
+        stmt = where_if(stmt, after,  ts_col >= after)
+    if before:
+        stmt = where_if(stmt, before, ts_col < before)
     if symbol_col is not None:
         stmt = where_if(stmt, symbol, symbol_col == symbol)
     return stmt

@@ -1,19 +1,25 @@
 from datetime import datetime
 from typing import Optional, List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from api.routes.v1.trades.dto import TradeDTO, OrderDTO, PositionDTO
 from api.util.pagination import PaginatedResult, PaginatedFilters
 from models import AccountRole, OrderStatus
 
 
+class AccountFilters(PaginatedFilters):
+    role: Optional[AccountRole] = None
+
+
 class AccountDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True, extra='ignore')
     id: int
     username: str
     balance: float
     role: AccountRole
     last_login_at: Optional[datetime]
+
 
 # Be weary of use, super duper expensive to query
 

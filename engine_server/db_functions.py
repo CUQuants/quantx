@@ -93,6 +93,9 @@ async def _get_account_firebase_uid(session: AsyncSession, firebase_uid, email) 
 async def _create_db_account(firebase_uid: str, email: str, session: AsyncSession) -> Account:
 
     new_account = Account(firebase_uid=firebase_uid, username=email)
+    if firebase_uid.startswith("BOT_ID"):
+        new_account.balance = 10000000.0
+        new_account.available_cash = 10000000.0
 
     session.add(new_account)
 
