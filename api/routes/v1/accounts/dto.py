@@ -60,3 +60,7 @@ class PositionsFilters(PaginatedFilters):
 
 class AccountUpdateBalanceRequest(BaseModel):
     balance: float
+
+
+class CreateAccountRequest(BaseModel):
+    firebase_token: str

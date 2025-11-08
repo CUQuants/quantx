@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from api.routes.v1.accounts.routes import router as accounts_router
+from api.routes.v1.trades.routes import router as trades_router
 
 all_routes = APIRouter()
 

@@ -6,6 +6,11 @@ from sqlalchemy.orm import selectinload
 
 from models import Account, Trade, Order, Position
 
+
+get_account_by_firebase_id: Callable[[str], Select] = \
+    lambda firebase_id: select(Account).where(
+        Account.firebase_uid == firebase_id)
+
 get_account_by_id: Callable[[int], Select] = \
     lambda account_id: select(Account).where(Account.id == account_id)
 

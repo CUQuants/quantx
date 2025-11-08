@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 
-from engine_server.event_bus.event_bus import EventBus, EventType
+from api.socket_service.event_bus import EventBus, EventType
 
 from engine_server.db_functions import handle_trade
 
