@@ -11,6 +11,7 @@ aiosqlite
 
 greenlet
 annotated-types
+sortedcontainers
 
 pytest
 anyio

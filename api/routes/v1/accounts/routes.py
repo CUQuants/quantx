@@ -53,10 +53,11 @@ async def get_accounts(dependencies=[Depends(current_auth)], session: AsyncSessi
 @router.get(
     "/{account_id}",
     response_model=AccountDTO,
-    dependencies=[Depends(moderator)],
+    # dependencies=[Depends(current_auth)],
 )
 async def get_account(account_id: int, session: AsyncSession = Depends(get_session)):
-    resp = await session.execute(get_account_by_firebase_id(account_id))
+    print("INSIDE ROUTE")
+    resp = await session.execute(get_account_by_id(account_id))
     account = resp.scalar_one_or_none()
 
     if not account:
