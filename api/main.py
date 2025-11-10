@@ -38,6 +38,12 @@ async def lifespan(app: FastAPI):
     await init_models()
     init_firebase()
 
+    async def market_data_request(payload: dict):
+        ticker = payload.get("ticker")
+        async with SessionFactory() as session:
+            async with session.begin():
+                await unified_service.MatchingEngine.get_book(ticker, session)
+
     async def market_data_builder(payload: dict):
         orders = payload.get("orders")
         ticker = payload.get("ticker")
@@ -56,6 +62,8 @@ async def lifespan(app: FastAPI):
     unified_service.event_bus.subscribe_event(EventType.TRADE, trade_handler)
     unified_service.event_bus.subscribe_event(
         EventType.BUILD_MARKETDATA, market_data_builder)
+    unified_service.event_bus.subscribe_event(
+        EventType.ORDERBOOK_SNAPSHOT, market_data_request)
     yield
 
 app = FastAPI(

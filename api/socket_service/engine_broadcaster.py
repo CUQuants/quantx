@@ -4,8 +4,7 @@ import json
 import asyncio
 from typing import List
 from websockets.asyncio.server import ServerConnection
-from sqlalchemy.ext.asyncio import AsyncSession
-from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
+from models import Order, OrderSide as Side, OrderType
 from api.socket_service.event_bus import EventBus
 from engine_server.broadcasters.broadcast_data import MarketDataSnapshot
 from datetime import datetime, timezone
@@ -38,8 +37,10 @@ class OrderBroadcaster(BaseBroadcaster):
         pass
 
     async def build_orderbook(self, ticker, orders: Order):
-        async with self.locks[ticker]:
-            self.market_data[ticker].build(orders)
+        self.market_data[ticker].build(orders)
+        snapshot = self.market_data[ticker].get_snapshot()
+
+        await self.broadcast_to_ticker(ticker, {"type": "batch", "orders": snapshot})
 
     async def add_subscription(self, ws: ServerConnectionAdapter, ticker: str):
         await self.add_client(ws)
@@ -56,10 +57,16 @@ class OrderBroadcaster(BaseBroadcaster):
                 self.client_subscriptions[ticker].add(client)
             async with self.locks[ticker]:
                 ticker_data = self.market_data.get(ticker)
-                initial_snapshot = ticker_data.get_snapshot()
-                print(initial_snapshot)
-            message = {"type": "batch", "orders": initial_snapshot}
-            await client.send(message)
+                if not ticker_data:
+                    raise KeyError(f"Invalid market data for ticker: {ticker}")
+                if ticker_data.is_empty():
+                    await self.bus.publish(EventType.ORDERBOOK_SNAPSHOT,
+                                           payload={"ticker": ticker})
+                    return
+                else:
+                    initial_snapshot = ticker_data.get_snapshot()
+                message = {"type": "batch", "orders": initial_snapshot}
+                await client.send(message)
 
     def extract_ticker(self, client: ServerConnection):
         try:

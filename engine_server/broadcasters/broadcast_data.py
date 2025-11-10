@@ -24,7 +24,9 @@ class MarketDataSnapshot:
     def build(self, orders: list[Order]):
         for order in orders:
             self.add_order(order.price, order.remaining_quantity, order.side)
-        print(self.get_snapshot())
+
+    def is_empty(self):
+        return self.total_bids == 0 and self.total_asks == 0
 
     def remove_order(self, price: float, amount_fulfilled: int, side: OrderSide) -> None:
 
@@ -76,9 +78,11 @@ class MarketDataSnapshot:
         return list(islice(book.items(), self.snapshot_length))
 
     def get_snapshot(self):
-        return {
+        snapshot = {
             "bids": self.get_top_book(OrderSide.BUY),
             "asks": self.get_top_book(OrderSide.SELL),
             "total_bids": self.total_bids,
             "total_asks": self.total_asks
         }
+
+        return snapshot
