@@ -8,6 +8,7 @@ class EventType(Enum):
     TRADE = "trade"
     ORDERBOOK_SNAPSHOT = "orderbook_snapshot"
     PRICE_UPDATE = "price_update"
+    BUILD_MARKETDATA = "build_marketdata"
 
 
 SubscriberFn = Callable[[dict], Awaitable[None]]

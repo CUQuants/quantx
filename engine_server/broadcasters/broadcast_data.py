@@ -1,4 +1,4 @@
-from models.trading import OrderSide
+from models.trading import OrderSide, Order
 from sortedcontainers import SortedDict
 from itertools import islice
 
@@ -21,6 +21,11 @@ class MarketDataSnapshot:
         self.total_bids = 0
         self.total_asks = 0
 
+    def build(self, orders: list[Order]):
+        for order in orders:
+            self.add_order(order.price, order.remaining_quantity, order.side)
+        print(self.get_snapshot())
+
     def remove_order(self, price: float, amount_fulfilled: int, side: OrderSide) -> None:
 
         book = self.bids if side == OrderSide.BUY else self.asks
@@ -42,7 +47,6 @@ class MarketDataSnapshot:
             book.pop(price)
 
     def add_order(self, price: float, quantity: int, side: OrderSide) -> None:
-
         book = self.bids if side == OrderSide.BUY else self.asks
         if price not in book:
             book[price] = 0

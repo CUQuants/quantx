@@ -2,18 +2,20 @@
 from models import Order, Trade, Account, Position
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
-from models import OrderSide
+from sqlalchemy import select, delete, or_
+from models import OrderSide, OrderStatus
 
 
 class OrderValidationError(Exception):
     pass
 
 
-async def add_db_order(order: Order, email: str, firebase_uid: str, session: AsyncSession):
+async def add_db_order(order: Order, firebase_uid: str, email: str, session: AsyncSession):
+
     account = await _get_account_firebase_uid(session, firebase_uid, email)
 
     await validate_order(session, order, account)
+
     order.account_id = account.id
     account.available_cash -= order.price * order.quantity
     session.add(order)
@@ -29,10 +31,6 @@ async def handle_trade(trade: Trade, session: AsyncSession) -> None:
     seller_account: Account = await session.get(Account, trade.sell_account_id)
     await update_account_balances(trade, session, buyer_account, seller_account)
     await update_positions(trade, session, buyer_account, seller_account)
-
-    print(buyer_account.balance)
-
-    await session.flush()
 
 
 async def update_account_balances(trade: Trade, session: AsyncSession, buyer_account: Account, seller_account: Account):
@@ -116,6 +114,7 @@ async def validate_order(session: AsyncSession, order: Order, account: Account) 
     - For a SELL order, if a user doesn't have a position, or the position size is less than the quantity of the order
     - If a user has an order that could possibly match with the incoming order
     """
+
     if order.quantity <= 0:
         raise OrderValidationError("Quantity must be positive")
 
@@ -136,3 +135,23 @@ async def validate_order(session: AsyncSession, order: Order, account: Account) 
         if position and position.quantity < order.quantity:
             raise OrderValidationError(
                 "Position size is not enough to execute sell order")
+
+
+async def get_all_orders(session: AsyncSession, symbol: str):
+    symbol = symbol.upper()
+
+    query = select(Order).where(Order.symbol == symbol).where(
+        or_(Order.status == OrderStatus.PENDING, Order.status == OrderStatus.PARTIAL))
+
+    res = await session.execute(query)
+
+    orders = res.scalars().all()
+
+    return orders
+
+
+async def get_db_order(session: AsyncSession, order_id: int) -> Order | None:
+    query = select(Order).where(Order.id == order_id)
+    res = await session.execute(query)
+    order = res.scalar_one_or_none()
+    return order

@@ -37,6 +37,10 @@ class OrderBroadcaster(BaseBroadcaster):
     async def create_batch_message(self):
         pass
 
+    async def build_orderbook(self, ticker, orders: Order):
+        async with self.locks[ticker]:
+            self.market_data[ticker].build(orders)
+
     async def add_subscription(self, ws: ServerConnectionAdapter, ticker: str):
         await self.add_client(ws)
         await self.initial_connection_action(ws, {"ticker": ticker})
@@ -75,6 +79,8 @@ class OrderBroadcaster(BaseBroadcaster):
         ticker = msg.get("ticker")
         price = msg.get("price")
 
+        new_data = None
+
         async with self.locks[ticker]:
             try:
                 ticker_data = self.market_data[ticker]
@@ -83,6 +89,7 @@ class OrderBroadcaster(BaseBroadcaster):
                 new_data = ticker_data.get_snapshot()
             except Exception as e:
                 print(e)
+
         await self.broadcast_to_ticker(ticker, {"type": "batch", "orders": new_data, "last_trade": price})
 
     async def broadcast_to_ticker(self, ticker: str, msg: dict):
@@ -136,8 +143,7 @@ class OrderBroadcaster(BaseBroadcaster):
                 async with session.begin():
                     order_object = Order(symbol=ticker, account_id=user_id,
                                          side=side, quantity=quantity, price=price, type=OrderType.LIMIT, filled_quantity=0, created_at=datetime.now(timezone.utc))
-
-                    db_order = await add_db_order(order_object, email, user_id, session)
+                    db_order = await add_db_order(order_object, user_id, email, session)
             except Exception as e:
                 print(e)
                 await self.send_error(websocket, "ORDER_VALIDATION_ERROR", str(e))

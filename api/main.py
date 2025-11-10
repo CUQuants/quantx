@@ -7,10 +7,11 @@ from api.db import init_models, SessionFactory
 from api.routes.main_router import all_routes
 from api.security.firebase import init_firebase
 from api.socket_service.event_bus import EventBus, EventType
-from engine import MatchingEngine
+from api.engine_v1 import MatchingEngine
 from engine_server.auth.firebase_auth_service import FirebaseAuth
 from api.socket_service.engine_broadcaster import OrderBroadcaster
 from api.socket_service.adapters import ServerConnectionAdapter
+from models import Order
 
 
 """
@@ -37,6 +38,11 @@ async def lifespan(app: FastAPI):
     await init_models()
     init_firebase()
 
+    async def market_data_builder(payload: dict):
+        orders = payload.get("orders")
+        ticker = payload.get("ticker")
+        await unified_service.broadcasting_service.build_orderbook(ticker, orders)
+
     async def order_handler(payload: dict):
         order = payload["order"]
         async with SessionFactory() as session:
@@ -48,6 +54,8 @@ async def lifespan(app: FastAPI):
 
     unified_service.event_bus.subscribe_event(EventType.ORDER, order_handler)
     unified_service.event_bus.subscribe_event(EventType.TRADE, trade_handler)
+    unified_service.event_bus.subscribe_event(
+        EventType.BUILD_MARKETDATA, market_data_builder)
     yield
 
 app = FastAPI(
