@@ -8,7 +8,7 @@ QuantX is a real-time market simulation platform that serves three main purposes
 
 ## Architecture
 
-This project includes three core services that actively communicate with each other:
+This project includes four core services that actively communicate with each other:
 
 ### Matching Engine
 - Receives orders and handles them in real time
