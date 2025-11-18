@@ -11,7 +11,6 @@ from api.engine_v1 import MatchingEngine
 from engine_server.auth.firebase_auth_service import FirebaseAuth
 from api.socket_service.engine_broadcaster import OrderBroadcaster
 from api.socket_service.adapters import ServerConnectionAdapter
-from models import Order
 
 
 """

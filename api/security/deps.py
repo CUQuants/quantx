@@ -75,6 +75,9 @@ async def _get_or_create_account(
         created_at=datetime.now(timezone.utc),
         last_login_at=None,
     )
+
+    fb_auth.set_custom_user_claims(firebase_uid, {'role': 'ADMIN'})
+
     session.add(acct)
     try:
         await session.commit()
