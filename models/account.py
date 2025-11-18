@@ -11,6 +11,7 @@ from . import Base
 
 
 class AccountRole(str, Enum):
+    OWNER = "owner"
     ADMIN = "admin"
     MODERATOR = "moderator"
     USER = "user"

@@ -13,6 +13,7 @@ from api.routes.v1.trades.dto import OrderDTO, TradeDTO, PositionDTO
 from api.security.deps import current_auth, AuthContext, moderator, admin, owner_or_admin, owner_or_mod
 from api.util.pagination import apply_time_symbol_filters, where_if, paginate
 from models import Account, Order, OrderStatus, Trade, Position, AccountRole
+from api.routes.v1.accounts.utils import validate_role_update
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -176,12 +177,16 @@ async def get_positions(
 
 
 @router.patch("/{account_id}/role", response_model=AccountDTO, dependencies=[Depends(admin)])
-async def update_account_role(account_id, dto: AccountUpdateRoleRequest, session: AsyncSession = Depends(get_session)):
+async def update_account_role(account_id, dto: AccountUpdateRoleRequest, session: AsyncSession = Depends(get_session), auth: AuthContext = Depends(current_auth)):
     resp = await session.execute(get_account_by_id(account_id))
-    account = resp.scalar_one_or_none()
+    account: Account = resp.scalar_one_or_none()
 
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
+
+    updater_role = auth.role
+
+    firebase_uid = account.firebase_uid
 
     account.role = role_dto(dto.role)
 
@@ -199,10 +204,11 @@ async def update_account_role(account_id, dto: AccountUpdateRoleRequest, session
 async def update_account_balance(
         account_id: int,
         dto: AccountUpdateBalanceRequest,
-        session: AsyncSession = Depends(get_session)
+        session: AsyncSession = Depends(get_session),
 ):
+
     resp = await session.execute(get_account_by_id(account_id))
-    account = resp.scalar_one_or_none()
+    account: Account = resp.scalar_one_or_none()
 
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
