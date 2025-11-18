@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_session
 from api.routes.v1.accounts.dto import AccountDTO, AccountUpdateBalanceRequest, CreateAccountRequest, \
-    OrdersResult, TradesResult, OrdersFilters, TradesFilters, PositionsResult, PositionsFilters, AccountFilters
+    OrdersResult, TradesResult, OrdersFilters, TradesFilters, PositionsResult, PositionsFilters, AccountFilters, AccountUpdateRoleRequest
 from api.routes.v1.accounts.queries import get_account_by_id, get_orders_by_account_id, get_trades_by_account_id, \
     get_positions_by_account_id, get_account_by_firebase_id, get_all_accounts, role_dto, InvalidRoleException
 from api.routes.v1.trades.dto import OrderDTO, TradeDTO, PositionDTO
@@ -173,6 +173,22 @@ async def get_positions(
         page_size=int(filters.page_size),
         positions=[PositionDTO.model_validate(p) for p in positions],
     )
+
+
+@router.patch("/{account_id}/role", response_model=AccountDTO, dependencies=[Depends(admin)])
+async def update_account_role(account_id, dto: AccountUpdateRoleRequest, session: AsyncSession = Depends(get_session)):
+    resp = await session.execute(get_account_by_id(account_id))
+    account = resp.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    account.role = role_dto(dto.role)
+
+    await session.commit()
+    await session.refresh(account)
+
+    return AccountDTO.model_validate(account)
 
 
 @router.put(

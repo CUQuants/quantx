@@ -68,5 +68,9 @@ class AccountUpdateBalanceRequest(BaseModel):
     balance: float
 
 
+class AccountUpdateRoleRequest(BaseModel):
+    role: str
+
+
 class CreateAccountRequest(BaseModel):
     firebase_token: str
