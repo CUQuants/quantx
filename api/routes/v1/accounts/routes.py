@@ -23,6 +23,7 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
     response_model=AccountDTO,
 )
 async def get_me(auth: AuthContext = Depends(current_auth)):
+    print(auth)
     return AccountDTO.model_validate(auth.account)
 
 
@@ -48,6 +49,7 @@ async def get_accounts(dependencies=[Depends(current_auth)], session: AsyncSessi
     accounts = resp.scalars().all()
     response_model = [AccountDTO.model_validate(
         account) for account in accounts]
+
     return response_model
 
 
@@ -185,10 +187,14 @@ async def update_account_role(account_id, dto: AccountUpdateRoleRequest, session
         raise HTTPException(status_code=404, detail="Account not found")
 
     updater_role = auth.role
+    print(updater_role)
 
-    firebase_uid = account.firebase_uid
+    dto_role = role_dto(dto.role)
 
-    account.role = role_dto(dto.role)
+    # Will check the role hierarchy to see if a user of a specific role can update another user's role, else throw an exception
+    validate_role_update(updater_role, dto_role)
+
+    account.role = dto_role
 
     await session.commit()
     await session.refresh(account)

@@ -54,5 +54,7 @@ def role_dto(role: str):
         return AccountRole.MODERATOR
     elif role == "USER":
         return AccountRole.USER
+    elif role == "OWNER":
+        return AccountRole.OWNER
     else:
         raise InvalidRoleException(f"Role {role} is invalid")
