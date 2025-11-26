@@ -58,10 +58,10 @@ async def update_positions(trade: Trade, session: AsyncSession, buyer_account: A
         buyer_position.average_price = new_average
 
     if seller_position:
+        realized_on_trade = (
+            trade.price - seller_position.average_price) * trade.quantity
+        seller_position.realized_pnl += realized_on_trade
         seller_position.quantity -= trade.quantity
-
-        if seller_position.quantity <= 0.0:
-            await session.execute(delete(Position).where(Position.id == seller_position.id))
 
 
 async def get_position(account_id: int, symbol: str, session: AsyncSession) -> Position:

@@ -1,15 +1,12 @@
-from typing import Optional, Callable
+from typing import Callable
 
 from sqlalchemy import select, Select, or_
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+from fastapi.exceptions import HTTPException
 
 from models import Account, Trade, Order, Position
 from models import AccountRole
-
-
-class InvalidRoleException(Exception):
-    message: str
 
 
 get_account_by_firebase_id: Callable[[str], Select] = \
@@ -25,7 +22,8 @@ get_full_account_by_id: Callable[[int], Select] = \
         .where(Account.id == account_id)
         .options(
             selectinload(Account.orders),
-            selectinload(Account.trades),
+            selectinload(Account.buy_trades),
+            selectinload(Account.sell_trades),
             selectinload(Account.positions),
         )
 )
@@ -38,7 +36,8 @@ get_trades_by_account_id: Callable[[int], Select] = \
         or_(Trade.buy_account_id == account_id, Trade.sell_account_id == account_id))
 
 get_positions_by_account_id: Callable[[int], Select] = \
-    lambda account_id: select(Position).where(Account.id == account_id)
+    lambda account_id: select(Position).where(
+        Position.account_id == account_id)
 
 get_all_accounts: Callable[[], Select] = select(Account)
 
@@ -57,4 +56,4 @@ def role_dto(role: str):
     elif role == "OWNER":
         return AccountRole.OWNER
     else:
-        raise InvalidRoleException(f"Role {role} is invalid")
+        raise HTTPException(status_code=400, detail=f"Role {role} is invalid")

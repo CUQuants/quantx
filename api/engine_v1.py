@@ -77,10 +77,10 @@ class OrderBook:
         return o_id
 
     def best(self):
-        bid = self.bids[0][0] if self.bids else None
+        bid = -self.bids[0][0] if self.bids else None
         ask = self.asks[0][0] if self.asks else None
 
-        return -bid, ask
+        return bid, ask
 
 
 """
@@ -336,10 +336,6 @@ class MatchingEngine:
         return trades
 
     async def _update_positions(self, trades: list[Trade], session: AsyncSession):
-        """
-        Yeah sorry guys I'm not writing this shit rn
-        """
-
         for trade in trades:
             await handle_trade(trade, session)
 

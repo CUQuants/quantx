@@ -78,11 +78,23 @@ class MarketDataSnapshot:
         return list(islice(book.items(), self.snapshot_length))
 
     def get_snapshot(self):
+        price_estimate = None
+        best_ask, best_bid = self.get_best_ask(), self.get_best_bid()
+        if best_ask and best_bid:
+            price_estimate = round((best_bid[0] + best_ask[0]) / 2.0, 2)
+        elif best_ask:
+            price_estimate = best_ask[0]
+        elif best_bid:
+            price_estimate = best_bid[0]
+        else:
+            price_estimate = 0.0
+        
         snapshot = {
             "bids": self.get_top_book(OrderSide.BUY),
             "asks": self.get_top_book(OrderSide.SELL),
             "total_bids": self.total_bids,
-            "total_asks": self.total_asks
+            "total_asks": self.total_asks,
+            "price": price_estimate
         }
 
         return snapshot

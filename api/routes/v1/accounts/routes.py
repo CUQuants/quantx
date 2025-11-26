@@ -8,7 +8,7 @@ from api.db import get_session
 from api.routes.v1.accounts.dto import AccountDTO, AccountUpdateBalanceRequest, CreateAccountRequest, \
     OrdersResult, TradesResult, OrdersFilters, TradesFilters, PositionsResult, PositionsFilters, AccountFilters, AccountUpdateRoleRequest
 from api.routes.v1.accounts.queries import get_account_by_id, get_orders_by_account_id, get_trades_by_account_id, \
-    get_positions_by_account_id, get_account_by_firebase_id, get_all_accounts, role_dto, InvalidRoleException
+    get_positions_by_account_id, get_all_accounts, role_dto
 from api.routes.v1.trades.dto import OrderDTO, TradeDTO, PositionDTO
 from api.security.deps import current_auth, AuthContext, moderator, admin, owner_or_admin, owner_or_mod
 from api.util.pagination import apply_time_symbol_filters, where_if, paginate
@@ -35,8 +35,6 @@ async def get_accounts(dependencies=[Depends(current_auth)], session: AsyncSessi
     if filters.role:
         try:
             role = role_dto(filters.role)
-        except InvalidRoleException as e:
-            raise HTTPException(status_code=404, detail=e.message)
 
         except Exception as e:
             raise HTTPException(
@@ -56,10 +54,9 @@ async def get_accounts(dependencies=[Depends(current_auth)], session: AsyncSessi
 @router.get(
     "/{account_id}",
     response_model=AccountDTO,
-    # dependencies=[Depends(current_auth)],
+    dependencies=[Depends(current_auth)],
 )
 async def get_account(account_id: int, session: AsyncSession = Depends(get_session)):
-    print("INSIDE ROUTE")
     resp = await session.execute(get_account_by_id(account_id))
     account = resp.scalar_one_or_none()
 
