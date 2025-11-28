@@ -30,6 +30,8 @@ class TradeDTO(BaseModel):
     price: float
     trade_value: float
     created_at: datetime
+    buy_account_id: int
+    sell_account_id: int
 
 
 class PositionDTO(BaseModel):

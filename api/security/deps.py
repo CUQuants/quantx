@@ -76,10 +76,12 @@ async def _get_or_create_account(
         created_at=datetime.now(timezone.utc),
         last_login_at=None,
     )
-
-    fb_auth.set_custom_user_claims(firebase_uid, {'role': 'ADMIN'})
-
     session.add(acct)
+    await session.flush()
+
+    fb_auth.set_custom_user_claims(
+        firebase_uid, {'role': 'admin', 'db_id': acct.id})
+
     try:
         await session.commit()
     except IntegrityError:

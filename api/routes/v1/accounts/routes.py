@@ -12,7 +12,7 @@ from api.routes.v1.accounts.queries import get_account_by_id, get_orders_by_acco
 from api.routes.v1.trades.dto import OrderDTO, TradeDTO, PositionDTO
 from api.security.deps import current_auth, AuthContext, moderator, admin, owner_or_admin, owner_or_mod
 from api.util.pagination import apply_time_symbol_filters, where_if, paginate
-from models import Account, Order, OrderStatus, Trade, Position, AccountRole
+from models import Account, Order, Trade, Position, AccountRole
 from api.routes.v1.accounts.utils import validate_role_update
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
