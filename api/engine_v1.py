@@ -13,7 +13,6 @@ from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 from api.socket_service.event_bus import EventBus, EventType
 
 from engine_server.db_functions import handle_trade, get_all_orders, get_db_order
-from engine_server.broadcasters.broadcast_data import MarketDataSnapshot
 
 """
 This will have a bit of a funky design to it for now,
@@ -37,8 +36,6 @@ class OrderBook:
         self.instrument_symbol = instrument_symbol
         self.bids = []
         self.asks = []
-        self.snapshot = MarketDataSnapshot(
-            ticker=instrument_symbol, snapshot_length=10)
 
     async def get_or_create(self, session: AsyncSession):
         """
@@ -49,7 +46,6 @@ class OrderBook:
             print("BUILDING BOOK")
             all_orders = await get_all_orders(session, self.instrument_symbol)
             await self.bus.publish(EventType.BUILD_MARKETDATA, payload={"orders": all_orders, "ticker": self.instrument_symbol})
-            self.snapshot.build(all_orders)
             for i in range(len(all_orders)):
                 self.push(all_orders[i])
         return self
@@ -142,8 +138,9 @@ class MatchingEngine:
 
     async def _refresh_mark_from_book(self, instrument_symbol: str):
         bid, ask = self.books[instrument_symbol].best()
-        bb = bid.price if bid else None
-        ba = ask.price if ask else None
+
+        bb = bid if bid else None
+        ba = ask if ask else None
 
         snap = self._marks[instrument_symbol]
         snap.best_bid, snap.best_ask = bb, ba
@@ -162,13 +159,24 @@ class MatchingEngine:
 
     async def get_mark_snapshot(self, instrument_symbol: str) -> MarkSnapshot:
         return self._marks.get(instrument_symbol, MarkSnapshot())
+    
+    async def get_market_data_snapshot(self, instrument_symbol: str) -> dict:
+        """Get the current market data snapshot for a ticker"""
+        if instrument_symbol in self.books:
+            return self.books[instrument_symbol].get_market_snapshot()
+        return {
+            "bids": [],
+            "asks": [],
+            "total_bids": 0,
+            "total_asks": 0,
+            "price": 0.0
+        }
 
     async def add_order(self, o: Order, db: AsyncSession):
 
         book = await self.get_book(o.symbol, db)
         trades: list[Trade] = []
 
-        # Market orders consume immediately
 
         if o.type == OrderType.MARKET:
             trades = await self._execute_market(o, db)
@@ -219,6 +227,7 @@ class MatchingEngine:
 
             trade_qty = min(remaining, maker_rem)
             trade_px = popped.price
+
 
             t = Trade(
                 symbol=mkt.symbol,
@@ -317,6 +326,7 @@ class MatchingEngine:
             a.status = OrderStatus.FILLED if self._remaining(
                 a) == 0 else OrderStatus.PARTIAL
 
+            
             payload = {
                 "ticker": instrument_symbol,
                 "price": px,
@@ -325,6 +335,7 @@ class MatchingEngine:
                 "ask_price": a.price,
             }
             await self.bus.publish(EventType.TRADE, payload)
+            
             # requeue any remainder
             if self._remaining(b) > 0:
                 book.push(b)

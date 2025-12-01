@@ -30,17 +30,70 @@ class OrderBroadcaster(BaseBroadcaster):
         self.client_subscriptions = {ticker: set() for ticker in tickers}
         self.locks = {ticker: asyncio.Lock() for ticker in tickers}
 
+        self.update_queues = {ticker: asyncio.Queue() for ticker in tickers}
+        self.queue_processors = {}
+
+        for ticker in tickers:
+            self.queue_processors[ticker] = asyncio.create_task(
+                self._process_snapshot_updates(ticker)
+            )
+
     async def create_message(self):
         pass
 
     async def create_batch_message(self):
         pass
 
-    async def build_orderbook(self, ticker, orders: Order):
-        self.market_data[ticker].build(orders)
-        snapshot = self.market_data[ticker].get_snapshot()
+    async def _process_snapshot_updates(self, ticker: str):
+        """
+        This solves the problem of asychronous race conditions for market data updates.
+        When many orders are placed simultaneously, the corresponding market data updates are processed sequentially.
+        """
+        while True:
+            try:
+                update_data = await self.update_queues[ticker].get()
 
-        await self.broadcast_to_ticker(ticker, {"type": "batch", "orders": snapshot})
+                if update_data["type"] == "add_order":
+                    self.market_data[ticker].add_order(
+                        update_data["price"],
+                        update_data["quantity"],
+                        update_data["side"]
+                    )
+                elif update_data["type"] == "remove_order":
+                    try:
+                        self.market_data[ticker].remove_order(
+                            update_data["bid_price"],
+                            update_data["quantity"],
+                            Side.BUY
+                        )
+                        self.market_data[ticker].remove_order(
+                            update_data["ask_price"],
+                            update_data["quantity"],
+                            Side.SELL
+                        )
+                    except ValueError as e:
+                        print(f"Trade removal error for {ticker}: {e}")
+                elif update_data["type"] == "build_orderbook":
+                    self.market_data[ticker].build(update_data["orders"])
+
+                snapshot = self.market_data[ticker].get_snapshot()
+                message = {"type": "batch", "orders": snapshot}
+
+                if "last_trade" in update_data:
+                    message["last_trade"] = update_data["last_trade"]
+
+                await self.broadcast_to_ticker(ticker, message)
+
+                self.update_queues[ticker].task_done()
+
+            except Exception as e:
+                print(f"Queue processor error for {ticker}: {e}")
+
+    async def build_orderbook(self, ticker, orders: Order):
+        await self.update_queues[ticker].put({
+            "type": "build_orderbook",
+            "orders": orders
+        })
 
     async def add_subscription(self, ws: ServerConnectionAdapter, ticker: str):
         await self.add_client(ws)
@@ -78,26 +131,20 @@ class OrderBroadcaster(BaseBroadcaster):
             return None
 
     async def on_trade(self, msg):
-
-        # handle errors more gracefully later
+        # Queue the trade update instead of processing directly
         bid_price = msg.get("bid_price")
         ask_price = msg.get("ask_price")
         quantity = msg.get("quantity")
         ticker = msg.get("ticker")
         price = msg.get("price")
 
-        new_data = None
-
-        async with self.locks[ticker]:
-            try:
-                ticker_data = self.market_data[ticker]
-                ticker_data.remove_order(bid_price, quantity, Side.BUY)
-                ticker_data.remove_order(ask_price, quantity, Side.SELL)
-                new_data = ticker_data.get_snapshot()
-            except Exception as e:
-                print(e)
-
-        await self.broadcast_to_ticker(ticker, {"type": "batch", "orders": new_data, "last_trade": price})
+        await self.update_queues[ticker].put({
+            "type": "remove_order",
+            "bid_price": bid_price,
+            "ask_price": ask_price,
+            "quantity": quantity,
+            "last_trade": price
+        })
 
     async def broadcast_to_ticker(self, ticker: str, msg: dict):
         async with self.clients_lock:
@@ -156,13 +203,13 @@ class OrderBroadcaster(BaseBroadcaster):
                 await self.send_error(websocket, "ORDER_VALIDATION_ERROR", str(e))
                 return
 
-        # Create order object
+        await self.update_queues[ticker].put({
+            "type": "add_order",
+            "price": price,
+            "quantity": quantity,
+            "side": order_side
+        })
 
-        async with self.locks[ticker]:
-            self.market_data[ticker].add_order(price, quantity, order_side)
-            new_snapshot = self.market_data[ticker].get_snapshot()
-
-        await self.broadcast_to_ticker(ticker, {"type": "batch", "orders": new_snapshot})
         await self.bus.publish(EventType.ORDER, {"order": db_order})
 
         await asyncio.gather(
@@ -174,3 +221,11 @@ class OrderBroadcaster(BaseBroadcaster):
         async with self.clients_lock:
             for ticker in self.client_subscriptions:
                 self.client_subscriptions[ticker].discard(websocket)
+
+    async def shutdown(self):
+        for ticker, task in self.queue_processors.items():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
