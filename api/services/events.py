@@ -18,7 +18,7 @@ from models import OrderSide, OrderType, OrderStatus
 class EventType(Enum):
     """
     All event types in the system.
-    
+
     Event Flow:
         RAW_ORDER → RiskEngine validates → VALIDATED_ORDER or ORDER_REJECTED
         VALIDATED_ORDER → MatchingEngine processes → TRADE_EXECUTED + MARKET_DATA_UPDATE
@@ -31,19 +31,20 @@ class EventType(Enum):
     VALIDATED_ORDER = auto()     # Order passed risk checks, ready for matching
     ORDER_REJECTED = auto()      # Order failed validation
     ORDER_PERSISTED = auto()     # Order successfully written to DB
-    
+
     # Trade events
     TRADE_EXECUTED = auto()      # Match occurred in matching engine
-    
+
     # Market data events
     MARKET_DATA_UPDATE = auto()  # Order book changed, broadcast to clients
+    REFRESH_MARKET_DATA = auto()
 
 
 @dataclass(frozen=True)
 class Event:
     """
     Base event wrapper for all events in the system.
-    
+
     Attributes:
         type: The event type enum
         payload: Event-specific data
@@ -52,7 +53,8 @@ class Event:
     """
     type: EventType
     payload: Dict[str, Any]
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc))
     correlation_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 
@@ -75,7 +77,7 @@ class RawOrderPayload:
     user_id: str            # Firebase UID
     email: str
     websocket_id: str       # To send response back to correct client
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "ticker": self.ticker,
@@ -87,13 +89,15 @@ class RawOrderPayload:
             "email": self.email,
             "websocket_id": self.websocket_id,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "RawOrderPayload":
         return cls(
             ticker=data["ticker"],
-            side=OrderSide(data["side"]) if isinstance(data["side"], str) else data["side"],
-            order_type=OrderType(data["order_type"]) if isinstance(data["order_type"], str) else data["order_type"],
+            side=OrderSide(data["side"]) if isinstance(
+                data["side"], str) else data["side"],
+            order_type=OrderType(data["order_type"]) if isinstance(
+                data["order_type"], str) else data["order_type"],
             quantity=data["quantity"],
             price=data.get("price"),
             user_id=data["user_id"],
@@ -118,7 +122,7 @@ class ValidatedOrderPayload:
     account_id: int         # Resolved DB account ID
     websocket_id: str
     estimated_value: float  # price * quantity (for cash reservation)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "ticker": self.ticker,
@@ -132,13 +136,15 @@ class ValidatedOrderPayload:
             "websocket_id": self.websocket_id,
             "estimated_value": self.estimated_value,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ValidatedOrderPayload":
         return cls(
             ticker=data["ticker"],
-            side=OrderSide(data["side"]) if isinstance(data["side"], str) else data["side"],
-            order_type=OrderType(data["order_type"]) if isinstance(data["order_type"], str) else data["order_type"],
+            side=OrderSide(data["side"]) if isinstance(
+                data["side"], str) else data["side"],
+            order_type=OrderType(data["order_type"]) if isinstance(
+                data["order_type"], str) else data["order_type"],
             quantity=data["quantity"],
             price=data["price"],
             user_id=data["user_id"],
@@ -147,6 +153,24 @@ class ValidatedOrderPayload:
             websocket_id=data["websocket_id"],
             estimated_value=data["estimated_value"],
         )
+
+
+@dataclass(frozen=True)
+class RefreshBookPayload:
+    """
+    Payload for calling the matching engine to refresh the book.
+    This calls a refresh of orders from the database into memory.
+    """
+    ticker: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ticker": self.ticker
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RefreshBookPayload":
+        return cls(ticker=data["ticker"])
 
 
 @dataclass(frozen=True)
@@ -164,7 +188,7 @@ class OrderRejectedPayload:
     websocket_id: str
     rejection_reason: str
     rejection_code: str     # e.g., "INSUFFICIENT_FUNDS", "INSUFFICIENT_SHARES"
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "ticker": self.ticker,
@@ -177,13 +201,15 @@ class OrderRejectedPayload:
             "rejection_reason": self.rejection_reason,
             "rejection_code": self.rejection_code,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "OrderRejectedPayload":
         return cls(
             ticker=data["ticker"],
-            side=OrderSide(data["side"]) if isinstance(data["side"], str) else data["side"],
-            order_type=OrderType(data["order_type"]) if isinstance(data["order_type"], str) else data["order_type"],
+            side=OrderSide(data["side"]) if isinstance(
+                data["side"], str) else data["side"],
+            order_type=OrderType(data["order_type"]) if isinstance(
+                data["order_type"], str) else data["order_type"],
             quantity=data["quantity"],
             price=data.get("price"),
             user_id=data["user_id"],
@@ -208,7 +234,7 @@ class TradeExecutedPayload:
     buyer_account_id: int
     seller_account_id: int
     timestamp: datetime
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "trade_id": self.trade_id,
@@ -221,7 +247,7 @@ class TradeExecutedPayload:
             "seller_account_id": self.seller_account_id,
             "timestamp": self.timestamp.isoformat(),
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TradeExecutedPayload":
         timestamp = data["timestamp"]
@@ -264,7 +290,7 @@ class MarketDataUpdatePayload:
     last_trade_price: Optional[float]
     last_trade_quantity: Optional[int]
     timestamp: datetime
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "ticker": self.ticker,
@@ -279,7 +305,7 @@ class MarketDataUpdatePayload:
             "last_trade_quantity": self.last_trade_quantity,
             "timestamp": self.timestamp.isoformat(),
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MarketDataUpdatePayload":
         timestamp = data["timestamp"]
@@ -311,7 +337,7 @@ class OrderPersistedPayload:
     account_id: int
     websocket_id: str
     status: OrderStatus
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "order_id": self.order_id,
@@ -320,7 +346,7 @@ class OrderPersistedPayload:
             "websocket_id": self.websocket_id,
             "status": self.status.value,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "OrderPersistedPayload":
         return cls(
@@ -328,5 +354,6 @@ class OrderPersistedPayload:
             ticker=data["ticker"],
             account_id=data["account_id"],
             websocket_id=data["websocket_id"],
-            status=OrderStatus(data["status"]) if isinstance(data["status"], str) else data["status"],
+            status=OrderStatus(data["status"]) if isinstance(
+                data["status"], str) else data["status"],
         )
