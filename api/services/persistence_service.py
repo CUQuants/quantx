@@ -151,6 +151,14 @@ class PersistenceService(BaseService):
                     # Create trade record
                     trade = await self._create_trade(session, payload)
 
+                    # Update order statuses (filled_quantity and status)
+                    await self._update_order_fill(
+                        session, payload.buyer_order_id, payload.quantity
+                    )
+                    await self._update_order_fill(
+                        session, payload.seller_order_id, payload.quantity
+                    )
+
                     # Update buyer position and balance
                     await self._update_buyer(session, payload)
 
@@ -174,8 +182,9 @@ class PersistenceService(BaseService):
         session: AsyncSession,
         payload: ValidatedOrderPayload,
     ) -> Order:
-        """Create a new order in the database."""
+        """Create a new order in the database using the order_id from payload."""
         order = Order(
+            id=payload.order_id,
             account_id=payload.account_id,
             symbol=payload.ticker.upper(),
             side=payload.side,
@@ -337,22 +346,38 @@ class PersistenceService(BaseService):
         return position
 
     # =========================================================================
-    # Order Status Updates (for future use)
+    # Order Status Updates
     # =========================================================================
 
-    async def _update_order_status(
+    async def _update_order_fill(
         self,
         session: AsyncSession,
         order_id: str,
-        filled_quantity: int,
-        total_quantity: int,
+        fill_quantity: int,
     ) -> None:
-        """Update order status based on fill."""
-        order = await session.get(Order, order_id)
-        if order:
-            order.filled_quantity = filled_quantity
+        """
+        Update order's filled_quantity and status after a trade.
 
-            if filled_quantity >= total_quantity:
-                order.status = OrderStatus.FILLED
-            elif filled_quantity > 0:
-                order.status = OrderStatus.PARTIAL
+        Args:
+            session: Database session
+            order_id: The order ID to update
+            fill_quantity: The quantity filled in this trade
+        """
+        order = await session.get(Order, order_id)
+        if not order:
+            self._logger.warning(f"Order {order_id} not found for fill update")
+            return
+
+        # Increment filled quantity
+        order.filled_quantity += fill_quantity
+
+        # Update status based on fill
+        if order.filled_quantity >= order.quantity:
+            order.status = OrderStatus.FILLED
+            self._logger.info(f"Order {order_id} fully filled")
+        elif order.filled_quantity > 0:
+            order.status = OrderStatus.PARTIAL
+            self._logger.info(
+                f"Order {order_id} partially filled: "
+                f"{order.filled_quantity}/{order.quantity}"
+            )

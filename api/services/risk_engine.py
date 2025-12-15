@@ -16,6 +16,7 @@ Does NOT:
 """
 
 import logging
+import uuid
 from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from sqlalchemy import select
@@ -184,6 +185,7 @@ class RiskEngine(BaseService):
             # await self._check_self_matching(session, account, payload)
 
             return ValidatedOrderPayload(
+                order_id=str(uuid.uuid4()),
                 ticker=payload.ticker,
                 side=payload.side,
                 order_type=payload.order_type,

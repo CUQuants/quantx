@@ -630,9 +630,9 @@ class MatchingEngine(BaseService):
             f"{payload.ticker} @ {payload.price}"
         )
 
-        # Create engine order
+        # Create engine order using the same order_id from the payload
         order = EngineOrder(
-            order_id=str(uuid.uuid4()),
+            order_id=payload.order_id,
             account_id=payload.account_id,
             ticker=payload.ticker.upper(),
             side=payload.side,

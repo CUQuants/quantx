@@ -112,6 +112,7 @@ class ValidatedOrderPayload:
     Payload for VALIDATED_ORDER events.
     Sent by RiskEngine after order passes all validation checks.
     """
+    order_id: str           # Unique order ID, shared by PersistenceService and MatchingEngine
     ticker: str
     side: OrderSide
     order_type: OrderType
@@ -125,6 +126,7 @@ class ValidatedOrderPayload:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "order_id": self.order_id,
             "ticker": self.ticker,
             "side": self.side.value,
             "order_type": self.order_type.value,
@@ -140,6 +142,7 @@ class ValidatedOrderPayload:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ValidatedOrderPayload":
         return cls(
+            order_id=data["order_id"],
             ticker=data["ticker"],
             side=OrderSide(data["side"]) if isinstance(
                 data["side"], str) else data["side"],
