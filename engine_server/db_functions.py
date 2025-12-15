@@ -3,7 +3,7 @@ from models import Order, Trade, Account, Position
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, or_
-from models import OrderSide, OrderStatus
+from models import OrderSide, OrderStatus, OrderType
 
 
 class OrderValidationError(Exception):
@@ -102,6 +102,16 @@ async def _create_db_account(firebase_uid: str, email: str, session: AsyncSessio
     await session.refresh(new_account)
 
     return new_account
+
+
+async def validate_market_order(session: AsyncSession, order: Order, account: Account) -> None:
+    """
+    A market order gets validated in the following ways:
+    - For a sell order, they must have the correct position size
+    - For a buy order, it gets checked for the worst case scenario with some price that gets calculated somehow
+    - They should also not be able to match with their own order
+    """
+    pass
 
 
 async def validate_order(session: AsyncSession, order: Order, account: Account) -> None:

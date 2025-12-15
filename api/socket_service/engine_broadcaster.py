@@ -191,12 +191,19 @@ class OrderBroadcaster(BaseBroadcaster):
         quantity = order.get("quantity")
         ticker = order.get("ticker")
         price = order.get("price")
+        order_type = order.get("orderType")
+
+        order_type = OrderType.LIMIT if order_type == "LIMIT" else OrderType.MARKET
+
+        if order_type == OrderType.MARKET:
+            # validate the market order pice
+            pass
 
         async with SessionFactory() as session:
             try:
                 async with session.begin():
                     order_object = Order(symbol=ticker, account_id=user_id,
-                                         side=side, quantity=quantity, price=price, type=OrderType.LIMIT, filled_quantity=0, created_at=datetime.now(timezone.utc))
+                                         side=side, quantity=quantity, price=price, type=order_type, filled_quantity=0, created_at=datetime.now(timezone.utc))
                     db_order = await add_db_order(order_object, user_id, email, session)
             except Exception as e:
                 print(e)

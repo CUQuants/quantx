@@ -20,6 +20,7 @@ pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
+service-account.json
 *.egg
 MANIFEST
 
