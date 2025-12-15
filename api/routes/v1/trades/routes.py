@@ -62,7 +62,6 @@ async def query_trades(session: AsyncSession = Depends(get_session), filters: Tr
         symbol=filters.symbol,
     )
 
-    stmt = where_if(stmt, filters.status, Order.status == filters.status)
     stmt = paginate(stmt, filters.page, filters.page_size)
 
     resp = await session.execute(stmt)

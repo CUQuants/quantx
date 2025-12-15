@@ -1,18 +1,19 @@
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response, status
 from fastapi.params import Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_session
-from api.routes.v1.accounts.dto import AccountDTO, AccountUpdateBalanceRequest, \
-    OrdersResult, TradesResult, OrdersFilters, TradesFilters, PositionsResult, PositionsFilters
+from api.routes.v1.accounts.dto import AccountDTO, AccountUpdateBalanceRequest, CreateAccountRequest, \
+    OrdersResult, TradesResult, OrdersFilters, TradesFilters, PositionsResult, PositionsFilters, AccountFilters, AccountUpdateRoleRequest
 from api.routes.v1.accounts.queries import get_account_by_id, get_orders_by_account_id, get_trades_by_account_id, \
-    get_positions_by_account_id
+    get_positions_by_account_id, get_all_accounts, role_dto
 from api.routes.v1.trades.dto import OrderDTO, TradeDTO, PositionDTO
 from api.security.deps import current_auth, AuthContext, moderator, admin, owner_or_admin, owner_or_mod
 from api.util.pagination import apply_time_symbol_filters, where_if, paginate
-from models import Account, Order, OrderStatus, Trade, Position
+from models import Account, Order, Trade, Position, AccountRole
+from api.routes.v1.accounts.utils import validate_role_update
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -22,13 +23,38 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
     response_model=AccountDTO,
 )
 async def get_me(auth: AuthContext = Depends(current_auth)):
+    print(auth)
     return AccountDTO.model_validate(auth.account)
+
+
+@router.get("/", response_model=List[AccountDTO])
+async def get_accounts(dependencies=[Depends(current_auth)], session: AsyncSession = Depends(get_session), filters: AccountFilters = Depends()):
+
+    query = get_all_accounts
+
+    if filters.role:
+        try:
+            role = role_dto(filters.role)
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, detail="An error occurred getting the account role")
+
+        query = query.where(Account.role == role)
+
+    resp = await session.execute(query)
+
+    accounts = resp.scalars().all()
+    response_model = [AccountDTO.model_validate(
+        account) for account in accounts]
+
+    return response_model
 
 
 @router.get(
     "/{account_id}",
     response_model=AccountDTO,
-    dependencies=[Depends(moderator)],
+    dependencies=[Depends(current_auth)],
 )
 async def get_account(account_id: int, session: AsyncSession = Depends(get_session)):
     resp = await session.execute(get_account_by_id(account_id))
@@ -95,9 +121,12 @@ async def get_trades(
         symbol=filters.symbol,
     )
 
-    stmt = where_if(stmt, filters.quantity, Trade.quantity >= filters.quantity)
+    if filters.quantity:
+        stmt = where_if(stmt, filters.quantity,
+                        Trade.quantity >= filters.quantity)
 
-    stmt = paginate(stmt, filters.page, filters.page_size)
+    if filters.page_size:
+        stmt = paginate(stmt, filters.page, filters.page_size)
 
     resp = await session.execute(stmt)
     trades = resp.scalars().all()
@@ -129,19 +158,45 @@ async def get_positions(
         symbol=filters.symbol,
     )
 
-    stmt = where_if(stmt, filters.quantity,
-                    Position.quantity >= filters.quantity)
+    if filters.quantity:
+        stmt = where_if(stmt, filters.quantity,
+                        Position.quantity >= filters.quantity)
 
-    stmt = paginate(stmt, filters.page, filters.page_size)
+    if filters.page_size:
+        stmt = paginate(stmt, int(filters.page), int(filters.page_size))
 
     resp = await session.execute(stmt)
     positions = resp.scalars().all()
 
     return PositionsResult(
-        page=filters.page,
-        page_size=filters.page_size,
+        page=int(filters.page),
+        page_size=int(filters.page_size),
         positions=[PositionDTO.model_validate(p) for p in positions],
     )
+
+
+@router.patch("/{account_id}/role", response_model=AccountDTO, dependencies=[Depends(admin)])
+async def update_account_role(account_id, dto: AccountUpdateRoleRequest, session: AsyncSession = Depends(get_session), auth: AuthContext = Depends(current_auth)):
+    resp = await session.execute(get_account_by_id(account_id))
+    account: Account = resp.scalar_one_or_none()
+
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    updater_role = auth.role
+    print(updater_role)
+
+    dto_role = role_dto(dto.role)
+
+    # Will check the role hierarchy to see if a user of a specific role can update another user's role, else throw an exception
+    validate_role_update(updater_role, dto_role)
+
+    account.role = dto_role
+
+    await session.commit()
+    await session.refresh(account)
+
+    return AccountDTO.model_validate(account)
 
 
 @router.put(
@@ -152,10 +207,11 @@ async def get_positions(
 async def update_account_balance(
         account_id: int,
         dto: AccountUpdateBalanceRequest,
-        session: AsyncSession = Depends(get_session)
+        session: AsyncSession = Depends(get_session),
 ):
+
     resp = await session.execute(get_account_by_id(account_id))
-    account = resp.scalar_one_or_none()
+    account: Account = resp.scalar_one_or_none()
 
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")

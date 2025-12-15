@@ -71,11 +71,17 @@ async def _get_or_create_account(
     acct = Account(
         username=username,
         firebase_uid=firebase_uid,
-        role=default_role,
+        # CHANGE LATER TO USER, this is just for testing purposes
+        role=AccountRole.ADMIN,
         created_at=datetime.now(timezone.utc),
         last_login_at=None,
     )
     session.add(acct)
+    await session.flush()
+
+    fb_auth.set_custom_user_claims(
+        firebase_uid, {'role': 'admin', 'db_id': acct.id})
+
     try:
         await session.commit()
     except IntegrityError:
@@ -194,6 +200,7 @@ async def current_auth(
 
 
 def require_roles(*roles: AccountRole) -> Callable[[AuthContext], AuthContext]:
+
     def _dep(auth: AuthContext = Depends(current_auth)) -> AuthContext:
         if auth.role not in roles:
             raise HTTPException(

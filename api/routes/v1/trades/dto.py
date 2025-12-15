@@ -1,12 +1,13 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Literal
 
 from models import OrderSide, OrderType, OrderStatus
 
 
 class OrderDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True, extra='ignore')
     id: str
     symbol: str
     side: OrderSide
@@ -14,24 +15,29 @@ class OrderDTO(BaseModel):
     quantity: int
     price: float
     status: OrderStatus
-    remaining_quantity: int
+    filled_quantity: int
     created_at: datetime
     updated_at: datetime
 
 
 class TradeDTO(BaseModel):
+
+    model_config = ConfigDict(from_attributes=True, extra='ignore')
+
     id: str
-    buy_order: OrderDTO
-    sell_order: OrderDTO
     symbol: str
     quantity: int
     price: float
-    value: float
+    trade_value: float
     created_at: datetime
+    buy_account_id: int
+    sell_account_id: int
 
 
 class PositionDTO(BaseModel):
-    id: str
+    model_config = ConfigDict(from_attributes=True, extra='ignore')
+
+    id: int
     symbol: str
     quantity: int
     average_price: float

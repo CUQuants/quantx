@@ -12,13 +12,22 @@ from models import Order, OrderSide as Side, Trade, OrderType, OrderStatus
 
 from api.socket_service.event_bus import EventBus, EventType
 
-from engine_server.db_functions import handle_trade, get_all_orders, add_db_order
+from engine_server.db_functions import handle_trade, get_all_orders, get_db_order
 
 """
 This will have a bit of a funky design to it for now,
 this is so that if we need to switch over to C++ for the part
 of the code that needs to be performant, we can do so quite easily
 """
+
+
+class InvalidOrderException(Exception):
+    msg: str
+
+
+@dataclass
+class EngineOrder:
+    order_id: int
 
 
 class OrderBook:
@@ -34,6 +43,7 @@ class OrderBook:
         The main source of truth should be the database, so if the book is empty, it will query the database for all orders that are either partially fulfilled or pending
         """
         if len(self.bids) == 0 and len(self.asks) == 0:
+            print("BUILDING BOOK")
             all_orders = await get_all_orders(session, self.instrument_symbol)
             await self.bus.publish(EventType.BUILD_MARKETDATA, payload={"orders": all_orders, "ticker": self.instrument_symbol})
             for i in range(len(all_orders)):
@@ -47,23 +57,24 @@ class OrderBook:
         (-Price, Time) - BID
         (Price, Time) - ASK
         """
-        key = (-o.price, o.created_at, o.id,
-               o) if o.side == Side.BUY else (o.price, o.created_at, o.id, o)
+        key = (-o.price, o.created_at,
+               o.id) if o.side == Side.BUY else (o.price, o.created_at, o.id)
+
         heapq.heappush(self.bids if o.side == Side.BUY else self.asks, key)
 
-    def pop_best(self, side: Side) -> Optional[Order]:
+    def pop_best(self, side: Side) -> Optional[int]:
         heap = self.bids if side == Side.BUY else self.asks
 
         if not heap:
             return None
 
-        _, _, _, o = heapq.heappop(heap)
+        _, _, o_id = heapq.heappop(heap)
 
-        return o
+        return o_id
 
     def best(self):
-        bid = self.bids[0][3] if self.bids else None
-        ask = self.asks[0][3] if self.asks else None
+        bid = -self.bids[0][0] if self.bids else None
+        ask = self.asks[0][0] if self.asks else None
 
         return bid, ask
 
@@ -126,10 +137,10 @@ class MatchingEngine:
         return int(q - f)
 
     async def _refresh_mark_from_book(self, instrument_symbol: str):
-        print("IN refresh")
         bid, ask = self.books[instrument_symbol].best()
-        bb = bid.price if bid else None
-        ba = ask.price if ask else None
+
+        bb = bid if bid else None
+        ba = ask if ask else None
 
         snap = self._marks[instrument_symbol]
         snap.best_bid, snap.best_ask = bb, ba
@@ -149,16 +160,22 @@ class MatchingEngine:
     async def get_mark_snapshot(self, instrument_symbol: str) -> MarkSnapshot:
         return self._marks.get(instrument_symbol, MarkSnapshot())
 
+    async def get_market_data_snapshot(self, instrument_symbol: str) -> dict:
+        """Get the current market data snapshot for a ticker"""
+        if instrument_symbol in self.books:
+            return self.books[instrument_symbol].get_market_snapshot()
+        return {
+            "bids": [],
+            "asks": [],
+            "total_bids": 0,
+            "total_asks": 0,
+            "price": 0.0
+        }
+
     async def add_order(self, o: Order, db: AsyncSession):
 
         book = await self.get_book(o.symbol, db)
         trades: list[Trade] = []
-
-        # Market orders consume immediately
-
-        db.add(o)
-
-        await
 
         if o.type == OrderType.MARKET:
             trades = await self._execute_market(o, db)
@@ -172,14 +189,17 @@ class MatchingEngine:
 
         trades = await self._cross(o.symbol, db)
 
-        async with self._lock:
-            await self._refresh_mark_from_book(o.symbol)
+        """
+        These will be implemented later. It will use the MarketDataSnapshot class instdad. Once a trade is executed, the snapshot will be sent to the broadcaster
+        """
+        # async with self._lock:
+        #     await self._refresh_mark_from_book(o.symbol)
 
-            if trades:
-                await self._on_trade(o.symbol, trades[-1].price)
+        #     if trades:
+        #         await self._on_trade(o.symbol, trades[-1].price)
 
-                # after trade, top-of-book may have shifted, so we'll recompute again
-                await self._refresh_mark_from_book(o.symbol)
+        #         # after trade, top-of-book may have shifted, so we'll recompute again
+        #         await self._refresh_mark_from_book(o.symbol)
 
         return trades
 
@@ -195,10 +215,12 @@ class MatchingEngine:
             if not contra:
                 break
 
-            popped = book.pop_best(
+            o_id = book.pop_best(
                 Side.SELL if mkt.side == Side.BUY else Side.BUY)
-            if popped is None:
+            if o_id is None:
                 break  # defensive
+
+            popped = await get_db_order(db, o_id)
 
             maker_rem = self._remaining(popped)
             if maker_rem <= 0:
@@ -232,8 +254,8 @@ class MatchingEngine:
                 "ticker": mkt.symbol,
                 "price": trade_px,
                 "quantity": trade_qty,
-                "bid_price": bid.price if mkt.side == Side.SELL else None,
-                "ask_price": ask.price if mkt.side == Side.BUY else None,
+                "bid_price": mkt.price if mkt.side == Side.BUY else popped.price,
+                "ask_price": mkt.price if mkt.side == Side.SELL else popped.price
             })
 
             # requeue maker if it still has shares/contracts left
@@ -248,8 +270,9 @@ class MatchingEngine:
 
         if trades:
             async with self._lock:
-                await self._on_trade(mkt.symbol, trades[-1].price)
-                await self._refresh_mark_from_book(mkt.symbol)
+                await self._update_positions(trades, db)
+                # await self._on_trade(mkt.symbol, trades[-1].price)
+                # await self._refresh_mark_from_book(mkt.symbol)
 
         return trades
 
@@ -259,13 +282,20 @@ class MatchingEngine:
 
         while True:
             bid, ask = book.best()
-            if not bid or not ask or bid.price < ask.price:
+            if not bid or not ask or bid < ask:
                 break
             # Pop both sides
-            b = book.pop_best(Side.BUY)
-            a = book.pop_best(Side.SELL)
-            if b is None or a is None:
+            b_id = book.pop_best(Side.BUY)
+            a_id = book.pop_best(Side.SELL)
+            if b_id is None or a_id is None:
                 break
+
+            a = await get_db_order(db, a_id)
+            b = await get_db_order(db, b_id)
+
+            if not a or not b:
+                raise InvalidOrderException(
+                    "One or more orders has an invalid order ID")
 
             b_rem = self._remaining(b)
             a_rem = self._remaining(a)
@@ -287,16 +317,6 @@ class MatchingEngine:
 
             trades.append(t)
 
-            payload = {
-                "ticker": instrument_symbol,
-                "price": px,
-                "quantity": qty,
-                "bid_price": b.price,
-                "ask_price": a.price,
-            }
-
-            await self.bus.publish(EventType.TRADE, payload)
-
             # advance fills
             b.filled_quantity = (b.filled_quantity or 0) + qty
             a.filled_quantity = (a.filled_quantity or 0) + qty
@@ -307,6 +327,15 @@ class MatchingEngine:
             a.status = OrderStatus.FILLED if self._remaining(
                 a) == 0 else OrderStatus.PARTIAL
 
+            payload = {
+                "ticker": instrument_symbol,
+                "price": px,
+                "quantity": qty,
+                "bid_price": b.price,
+                "ask_price": a.price,
+            }
+            await self.bus.publish(EventType.TRADE, payload)
+
             # requeue any remainder
             if self._remaining(b) > 0:
                 book.push(b)
@@ -314,19 +343,11 @@ class MatchingEngine:
                 book.push(a)
 
         if trades:
-            await self._update_positions(trades, db, [b, a])
+            await self._update_positions(trades, db)
         return trades
 
-    async def _update_positions(self, trades: list[Trade], session: AsyncSession, orders: list[Order]):
-        """
-        Yeah sorry guys I'm not writing this shit rn
-        """
-        for o in orders:
-            state = inspect(o)
-        if state.transient:
-            session.add(o)
-        elif state.detached:
-            await session.merge(o)
-
+    async def _update_positions(self, trades: list[Trade], session: AsyncSession):
         for trade in trades:
             await handle_trade(trade, session)
+
+        await session.flush()
