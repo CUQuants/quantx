@@ -62,6 +62,8 @@ class WebSocketClient:
         self.email: Optional[str] = None
         self.subscribed_tickers: Set[str] = set()
 
+        self.allowed_tickers = ["QNTX", "NVDA"]
+
     async def send(self, message: dict) -> bool:
         """
         Send a message to the client.
