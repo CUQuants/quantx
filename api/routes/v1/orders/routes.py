@@ -16,6 +16,9 @@ from api.routes.v1.orders.dto import CancelOrderResponse, CancelOrderError
 from api.security.deps import current_auth, AuthContext
 from api.services.events import EventType, OrderCancelledPayload
 from models import Order, Account, Position, OrderStatus, OrderSide
+from datetime import datetime, timezone
+import uuid
+from api.services.events import Event
 
 logger = logging.getLogger(__name__)
 
@@ -170,11 +173,15 @@ async def cancel_order(
             account_id=account_id,
             websocket_id="",  # No websocket for REST API calls
         )
-        
-        await container.event_bus.publish(
-            EventType.ORDER_CANCELLED,
-            cancelled_payload.to_dict(),
+
+        event = Event(
+            type=EventType.ORDER_CANCELLED,
+            payload=cancelled_payload.to_dict(),
+            timestamp=datetime.now(timezone.utc),
+            correlation_id=str(uuid.uuid4()),
         )
+        
+        await container.event_bus.publish(event)
         
         logger.info(f"Published ORDER_CANCELLED event for order {order_id}")
         
