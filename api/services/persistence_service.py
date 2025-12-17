@@ -101,14 +101,15 @@ class PersistenceService(BaseService):
                 async with session.begin():
                     order = await self._create_order(session, payload)
 
-                    # Reserve cash for buy orders, shares for sell orders
-                    if payload.side == OrderSide.BUY:
+                    # Reserve cash for LIMIT buy orders, shares for sell orders
+                    # Market orders execute immediately, so no reservation needed
+                    if payload.side == OrderSide.BUY and payload.order_type == OrderType.LIMIT:
                         await self._reserve_cash(
                             session,
                             payload.account_id,
                             payload.estimated_value
                         )
-                    else:
+                    elif payload.side == OrderSide.SELL:
                         await self._reserve_shares(
                             session,
                             payload.account_id,
@@ -413,13 +414,35 @@ class PersistenceService(BaseService):
 
         - Deduct balance (actual balance, not just available_cash)
         - Add to position (create if doesn't exist)
+        
+        Available cash handling:
+        - LIMIT orders: Cash was reserved at order.price * order.quantity when order was placed.
+                        On trade, we release the reserved amount for THIS fill (order.price * fill_qty)
+                        and then the balance deduction syncs available_cash with balance.
+                        Net effect: available_cash += (reserved_for_fill - trade_value)
+        - MARKET orders: No cash was reserved. Just deduct trade_value from available_cash.
         """
+        buyer_order = await session.get(Order, payload.buyer_order_id)
         trade_value = payload.price * payload.quantity
 
         # Update account balance
         account = await session.get(Account, payload.buyer_account_id)
         if account:
             account.balance -= trade_value
+            
+            if buyer_order.type == OrderType.LIMIT:
+                # For limit orders, cash was reserved at the limit price for the full order.
+                # Release the reserved amount for THIS fill quantity, then account for actual trade value.
+                # Reserved for this fill = order.price * payload.quantity (the fill qty, not full order qty)
+                reserved_for_this_fill = buyer_order.price * payload.quantity
+                # Net change: +reserved_for_this_fill - trade_value
+                # If trade_value == reserved (filled at limit price), no change to available_cash
+                # If trade_value < reserved (filled below limit), available_cash increases (got a better deal)
+                account.available_cash += (reserved_for_this_fill - trade_value)
+            else:
+                # For market orders, no cash was reserved upfront.
+                # Simply deduct the trade value from available_cash.
+                account.available_cash -= trade_value
 
         # Update position
         position = await self._get_or_create_position(

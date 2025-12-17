@@ -60,6 +60,7 @@ async def get_account(account_id: int, session: AsyncSession = Depends(get_sessi
     resp = await session.execute(get_account_by_id(account_id))
     account = resp.scalar_one_or_none()
 
+
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 

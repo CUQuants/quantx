@@ -19,6 +19,7 @@ class AccountDTO(BaseModel):
     balance: float
     role: AccountRole
     last_login_at: Optional[datetime]
+    available_cash: float
 
 
 # Be weary of use, super duper expensive to query
