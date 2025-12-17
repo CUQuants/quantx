@@ -270,7 +270,8 @@ class RiskEngine(BaseService):
         """
         Validate a sell order.
 
-        Checks that user has sufficient shares to sell.
+        Checks that user has sufficient available shares to sell.
+        Available shares = total quantity - reserved shares (in active sell orders).
         """
         position = await self._get_position(
             session, account.id, payload.ticker
@@ -285,11 +286,14 @@ class RiskEngine(BaseService):
                 f"No position found for {payload.ticker}"
             )
 
-        if position.quantity < payload.quantity:
+        # Check available shares (not reserved in other sell orders)
+        available_shares = position.quantity - position.reserved_shares
+
+        if available_shares < payload.quantity:
             raise OrderValidationError(
                 "INSUFFICIENT_SHARES",
                 f"Insufficient shares. Required: {payload.quantity}, "
-                f"Available: {position.quantity}"
+                f"Available: {available_shares}"
             )
 
     # =========================================================================

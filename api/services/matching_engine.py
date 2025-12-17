@@ -38,7 +38,8 @@ from .events import (
     ValidatedOrderPayload,
     TradeExecutedPayload,
     MarketDataUpdatePayload,
-    RefreshBookPayload
+    RefreshBookPayload,
+    OrderCancelledPayload,
 )
 
 logger = logging.getLogger(__name__)
@@ -357,7 +358,8 @@ class MatchingEngine(BaseService):
     def _get_subscriptions(self) -> List[Tuple[EventType, EventHandler]]:
         return [
             (EventType.VALIDATED_ORDER, self._handle_validated_order),
-            (EventType.REFRESH_MARKET_DATA, self._handle_book_refresh)
+            (EventType.REFRESH_MARKET_DATA, self._handle_book_refresh),
+            (EventType.ORDER_CANCELLED, self._handle_order_cancelled),
         ]
 
     # =========================================================================
@@ -394,6 +396,58 @@ class MatchingEngine(BaseService):
             # Seller wants to know best bid
             result = book.get_best_bid()
             return result[0] if result else None
+
+    async def _handle_order_cancelled(self, event: Event) -> None:
+        """
+        Handle ORDER_CANCELLED event from PersistenceService.
+
+        Removes the order from the in-memory order book and updates
+        the market data snapshot, then broadcasts the update.
+        """
+        payload = OrderCancelledPayload.from_dict(event.payload)
+
+        ticker = payload.ticker.upper()
+
+        if ticker not in self._books:
+            self._logger.warning(
+                f"Cannot cancel order for unknown ticker: {ticker}"
+            )
+            return
+
+        async with self._lock:
+            book = self._books[ticker]
+            market_data = self._market_data[ticker]
+
+            # Remove order from the orders dict
+            # This makes lazy removal work - when get_best_bid/ask encounters
+            # this order_id, it won't find it in the dict and will skip it
+            removed_order = book.remove_order(payload.order_id)
+
+            if removed_order:
+                self._logger.info(
+                    f"Removed order {payload.order_id} from {ticker} book"
+                )
+            else:
+                self._logger.debug(
+                    f"Order {payload.order_id} not found in {ticker} book "
+                    "(may have already been filled or removed)"
+                )
+
+            # Update market data snapshot - remove the remaining quantity
+            # from the appropriate price level
+            if payload.remaining_quantity > 0:
+                market_data.remove_order(
+                    payload.price,
+                    payload.remaining_quantity,
+                    payload.side,
+                )
+                self._logger.info(
+                    f"Updated market data: removed {payload.remaining_quantity} "
+                    f"from {payload.side.value} @ {payload.price}"
+                )
+
+        # Publish market data update to broadcast to clients
+        await self._publish_market_data_update(ticker, event.correlation_id)
 
     async def _handle_book_refresh(self, event: Event):
         payload = RefreshBookPayload.from_dict(event.payload)

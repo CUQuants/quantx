@@ -33,6 +33,9 @@ from .events import (
     RawOrderPayload,
     OrderRejectedPayload,
     OrderPersistedPayload,
+    CancelOrderPayload,
+    OrderCancelledPayload,
+    CancelRejectedPayload,
 )
 
 logger = logging.getLogger(__name__)
@@ -140,6 +143,8 @@ class BroadcastingService(BaseService):
         return [
             (EventType.ORDER_REJECTED, self._handle_order_rejected),
             (EventType.ORDER_PERSISTED, self._handle_order_persisted),
+            (EventType.ORDER_CANCELLED, self._handle_order_cancelled),
+            (EventType.CANCEL_REJECTED, self._handle_cancel_rejected),
         ]
 
     # =========================================================================
@@ -206,11 +211,61 @@ class BroadcastingService(BaseService):
 
         if message_type == "order":
             await self._handle_order_message(client, message)
+        elif message_type == "cancel_order":
+            await self._handle_cancel_order_message(client, message)
         else:
             await client.send_error(
                 "INVALID_MESSAGE_TYPE",
                 f"Unknown message type: {message_type}"
             )
+
+    async def _handle_cancel_order_message(self, client: WebSocketClient, message: dict) -> None:
+        """
+        Handle order cancellation request from a client.
+
+        Authenticates the user and publishes a CANCEL_ORDER event.
+        """
+        # Authenticate
+        token = message.get("token")
+        auth_result = self.auth_service.validate_token(token)
+
+        if not auth_result.get("success", False):
+            error_code = auth_result.get("error_code", "AUTH_ERROR")
+            error_message = auth_result.get("error", "Authentication failed")
+            self._logger.warning(
+                f"Auth failed for client {client.client_id}: {error_code}")
+            await client.send_error(error_code, error_message)
+            return
+
+        # Extract user info
+        user_id = auth_result.get("user_id")
+        email = auth_result.get("email")
+
+        # Update client auth status
+        client.authenticated = True
+        client.user_id = user_id
+        client.email = email
+
+        # Parse order_id from message
+        order_id = message.get("order_id")
+
+        if not order_id:
+            await client.send_error("MISSING_ORDER_ID", "Order ID is required for cancellation")
+            return
+
+        # Create CANCEL_ORDER payload
+        payload = CancelOrderPayload(
+            order_id=order_id,
+            user_id=user_id,
+            websocket_id=client.client_id,
+        )
+
+        self._logger.info(
+            f"Publishing CANCEL_ORDER: order_id={order_id} from user {user_id}"
+        )
+
+        # Publish CANCEL_ORDER event
+        await self.publish(EventType.CANCEL_ORDER, payload.to_dict())
 
     async def _handle_order_message(
         self,
@@ -328,6 +383,44 @@ class BroadcastingService(BaseService):
             self._logger.info(
                 f"Sent confirmation to client {payload.websocket_id}: "
                 f"order {payload.order_id}"
+            )
+
+    async def _handle_order_cancelled(self, event: Event) -> None:
+        """
+        Handle ORDER_CANCELLED event - send cancellation confirmation to client.
+        """
+        payload = OrderCancelledPayload.from_dict(event.payload)
+
+        client = await self.get_client(payload.websocket_id)
+        if client:
+            await client.send_success(
+                "order_cancel_success",
+                {
+                    "message": "Order cancelled successfully",
+                    "order_id": payload.order_id,
+                    "ticker": payload.ticker,
+                }
+            )
+            self._logger.info(
+                f"Sent cancel confirmation to client {payload.websocket_id}: "
+                f"order {payload.order_id}"
+            )
+
+    async def _handle_cancel_rejected(self, event: Event) -> None:
+        """
+        Handle CANCEL_REJECTED event - send error to client.
+        """
+        payload = CancelRejectedPayload.from_dict(event.payload)
+
+        client = await self.get_client(payload.websocket_id)
+        if client:
+            await client.send_error(
+                payload.rejection_code,
+                payload.rejection_reason,
+            )
+            self._logger.info(
+                f"Sent cancel rejection to client {payload.websocket_id}: "
+                f"{payload.rejection_code}"
             )
 
     # =========================================================================

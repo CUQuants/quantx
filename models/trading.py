@@ -158,6 +158,7 @@ class Position(Base):
         "accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     symbol: Mapped[str] = mapped_column(String, default="CQAF", index=True)
     quantity: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_shares: Mapped[int] = mapped_column(Integer, default=0)
     average_price: Mapped[float] = mapped_column(Float, default=0.0)
     unrealized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
     realized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
@@ -168,6 +169,11 @@ class Position(Base):
         nullable=False,
         index=True,
     )
+
+    @property
+    def available_shares(self) -> int:
+        """Shares available for selling (not reserved in active sell orders)."""
+        return self.quantity - self.reserved_shares
 
     account: Mapped["Account"] = relationship(
         "Account",

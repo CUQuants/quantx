@@ -25,6 +25,11 @@ class EventType(Enum):
         VALIDATED_ORDER → PersistenceService → ORDER_PERSISTED
         TRADE_EXECUTED → PersistenceService → updates DB
         MARKET_DATA_UPDATE → MarketDataBroadcaster → WebSocket clients
+
+    Cancel Flow:
+        CANCEL_ORDER → PersistenceService → ORDER_CANCELLED or CANCEL_REJECTED
+        ORDER_CANCELLED → MatchingEngine → MARKET_DATA_UPDATE
+        ORDER_CANCELLED → BroadcastingService → client confirmation
     """
     # Order lifecycle events
     RAW_ORDER = auto()           # Unauthenticated order from WebSocket (after auth)
@@ -37,7 +42,13 @@ class EventType(Enum):
 
     # Market data events
     MARKET_DATA_UPDATE = auto()  # Order book changed, broadcast to clients
+    # Request for orders to be loaded from the database into memory
     REFRESH_MARKET_DATA = auto()
+
+    # Order cancellation events
+    CANCEL_ORDER = auto()        # Request to cancel an order
+    ORDER_CANCELLED = auto()     # Order successfully cancelled
+    CANCEL_REJECTED = auto()     # Order cancellation failed
 
 
 @dataclass(frozen=True)
@@ -359,4 +370,101 @@ class OrderPersistedPayload:
             websocket_id=data["websocket_id"],
             status=OrderStatus(data["status"]) if isinstance(
                 data["status"], str) else data["status"],
+        )
+
+
+@dataclass(frozen=True)
+class CancelOrderPayload:
+    """
+    Payload for CANCEL_ORDER events.
+    Sent by BroadcastingService when user requests order cancellation.
+    """
+    order_id: str
+    user_id: str           # Firebase UID for ownership validation
+    websocket_id: str      # To send response back to correct client
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "order_id": self.order_id,
+            "user_id": self.user_id,
+            "websocket_id": self.websocket_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CancelOrderPayload":
+        return cls(
+            order_id=data["order_id"],
+            user_id=data["user_id"],
+            websocket_id=data["websocket_id"],
+        )
+
+
+@dataclass(frozen=True)
+class OrderCancelledPayload:
+    """
+    Payload for ORDER_CANCELLED events.
+    Sent by PersistenceService after successfully cancelling an order.
+    Used by:
+        - BroadcastingService to send confirmation to client
+        - MatchingEngine to remove order from book and update market data
+    """
+    order_id: str
+    ticker: str
+    side: OrderSide
+    price: float
+    remaining_quantity: int  # Quantity that was unfilled (for market data update)
+    account_id: int
+    websocket_id: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "order_id": self.order_id,
+            "ticker": self.ticker,
+            "side": self.side.value,
+            "price": self.price,
+            "remaining_quantity": self.remaining_quantity,
+            "account_id": self.account_id,
+            "websocket_id": self.websocket_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "OrderCancelledPayload":
+        return cls(
+            order_id=data["order_id"],
+            ticker=data["ticker"],
+            side=OrderSide(data["side"]) if isinstance(
+                data["side"], str) else data["side"],
+            price=data["price"],
+            remaining_quantity=data["remaining_quantity"],
+            account_id=data["account_id"],
+            websocket_id=data["websocket_id"],
+        )
+
+
+@dataclass(frozen=True)
+class CancelRejectedPayload:
+    """
+    Payload for CANCEL_REJECTED events.
+    Sent by PersistenceService when order cancellation fails.
+    """
+    order_id: str
+    websocket_id: str
+    rejection_reason: str
+    rejection_code: str  # e.g., "ORDER_NOT_FOUND", "NOT_OWNER", "NOT_CANCELABLE"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "order_id": self.order_id,
+            "websocket_id": self.websocket_id,
+            "rejection_reason": self.rejection_reason,
+            "rejection_code": self.rejection_code,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CancelRejectedPayload":
+        return cls(
+            order_id=data["order_id"],
+            websocket_id=data["websocket_id"],
+            rejection_reason=data["rejection_reason"],
+            rejection_code=data["rejection_code"],
         )
