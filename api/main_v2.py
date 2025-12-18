@@ -1,5 +1,5 @@
 """
-QuantX Trading API - Service-Oriented Architecture
+QuantX Trading API
 
 This is the main entry point for the refactored trading system.
 All services communicate via an asyncio.Queue-based event bus.
@@ -28,19 +28,16 @@ from api.security.firebase import init_firebase
 from api.services import ServiceContainer
 from engine_server.auth.firebase_auth_service import FirebaseAuth
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# Global service container
 _service_container: Optional[ServiceContainer] = None
 
 
 def get_service_container() -> ServiceContainer:
-    """Get the global service container."""
     if _service_container is None:
         raise RuntimeError("Service container not initialized")
     return _service_container
@@ -58,15 +55,12 @@ async def lifespan(app: FastAPI):
 
     logger.info("Starting trading API...")
 
-    # Initialize database
     await init_models()
     logger.info("Database initialized")
 
-    # Initialize Firebase
     init_firebase()
     logger.info("Firebase initialized")
 
-    # Create and start service container
     _service_container = ServiceContainer(
         session_factory=SessionFactory,
         auth_service=FirebaseAuth(),
@@ -78,13 +72,11 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
     logger.info("Shutting down trading API...")
     await _service_container.stop()
     logger.info("All services stopped")
 
 
-# Create FastAPI app
 app = FastAPI(
     title="QuantX Trading API",
     description="Service-oriented trading platform with real-time WebSocket support",
@@ -92,10 +84,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Include REST API routes
 app.include_router(all_routes, prefix="/api")
 
-# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -104,10 +94,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# =============================================================================
-# WebSocket Endpoint
-# =============================================================================
 
 @app.websocket("/ws/{ticker}")
 async def websocket_endpoint(websocket: WebSocket, ticker: str):
@@ -135,34 +121,27 @@ async def websocket_endpoint(websocket: WebSocket, ticker: str):
     ticker = ticker.upper()
     container = get_service_container()
 
-    # Validate ticker
     if ticker not in container.tickers:
         await websocket.close(code=4000, reason="Invalid ticker")
         return
 
-    # Accept connection
     await websocket.accept()
 
-    # Ensure order book is hydrated before client gets market data
-    # This handles edge cases where hydration failed on startup
-    # or if a new ticker was added dynamically
+    # When a user subscribes to a ticker, it must be synced with the database
+    # This call will lazily load orders from the database into the matching engine if needed
     await container.matching_engine.ensure_hydrated(ticker)
 
-    # Register client with broadcasting service
     client = await container.broadcasting_service.add_client(websocket, ticker)
 
     if not client:
         await websocket.close(code=4001, reason="Failed to register client")
         return
 
-    # Subscribe to market data
     await container.market_data_broadcaster.subscribe(client, ticker)
 
-    # Send initial market data snapshot
     await container.market_data_broadcaster.send_initial_snapshot(client, ticker)
 
     try:
-        # Main message loop
         while True:
             data = await websocket.receive_json()
             await container.broadcasting_service.handle_message(client, data)

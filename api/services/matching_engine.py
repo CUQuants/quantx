@@ -8,14 +8,8 @@ Responsibilities:
     - Provides get_best_price() for Risk Engine queries
     - Publishes TRADE_EXECUTED and MARKET_DATA_UPDATE events
     - Hydrates order books from database on startup or when empty
-
-Does NOT:
-    - Write to database (PersistenceService handles this)
-    - Validate orders (RiskEngine handles this)
-    - Handle WebSocket connections
 """
 
-import asyncio
 import heapq
 import uuid
 import logging
@@ -89,9 +83,7 @@ class MarketDataSnapshot:
         self.ticker = ticker
         self.snapshot_depth = snapshot_depth
 
-        # Bids sorted descending by price (negate key for descending)
         self.bids: SortedDict = SortedDict(lambda x: -x)
-        # Asks sorted ascending by price
         self.asks: SortedDict = SortedDict()
 
         self.total_bid_quantity = 0
@@ -100,7 +92,6 @@ class MarketDataSnapshot:
         self.last_trade_quantity: Optional[int] = None
 
     def add_order(self, price: float, quantity: int, side: OrderSide) -> None:
-        """Add order quantity to a price level."""
         book = self.bids if side == OrderSide.BUY else self.asks
 
         if price not in book:
@@ -113,7 +104,6 @@ class MarketDataSnapshot:
             self.total_ask_quantity += quantity
 
     def remove_order(self, price: float, quantity: int, side: OrderSide) -> None:
-        """Remove order quantity from a price level."""
         book = self.bids if side == OrderSide.BUY else self.asks
 
         if price not in book:
@@ -130,23 +120,20 @@ class MarketDataSnapshot:
             self.total_ask_quantity = max(
                 0, self.total_ask_quantity - quantity)
 
-        # Remove empty price levels
+        # Clean out key if there are no orders at a specific price
         if book[price] <= 0:
             del book[price]
 
     def update_last_trade(self, price: float, quantity: int) -> None:
-        """Update last trade information."""
         self.last_trade_price = price
         self.last_trade_quantity = quantity
 
     def get_best_bid(self) -> Optional[float]:
-        """Get the best (highest) bid price."""
         if not self.bids:
             return None
         return self.bids.keys()[0]
 
     def get_best_ask(self) -> Optional[float]:
-        """Get the best (lowest) ask price."""
         if not self.asks:
             return None
         return self.asks.keys()[0]
@@ -165,12 +152,10 @@ class MarketDataSnapshot:
         return None
 
     def get_top_levels(self, side: OrderSide) -> List[Tuple[float, int]]:
-        """Get top N price levels for a side."""
         book = self.bids if side == OrderSide.BUY else self.asks
         return list(book.items())[:self.snapshot_depth]
 
     def get_snapshot(self) -> MarketDataUpdatePayload:
-        """Generate a complete market data snapshot."""
         return MarketDataUpdatePayload(
             ticker=self.ticker,
             bids=self.get_top_levels(OrderSide.BUY),
@@ -186,7 +171,6 @@ class MarketDataSnapshot:
         )
 
     def is_empty(self) -> bool:
-        """Check if the order book is empty."""
         return self.total_bid_quantity == 0 and self.total_ask_quantity == 0
 
 

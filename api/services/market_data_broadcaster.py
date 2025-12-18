@@ -108,7 +108,8 @@ class MarketDataBroadcaster(BaseService):
             f"Client {client.client_id} subscribed to {ticker}"
         )
 
-        # Send last known snapshot if available
+        # If the snapshot is available, it will send it to the client
+        # If not, it will request it to load from the database, and perform a market data refresh
         if ticker in self._last_snapshots:
             await self._send_snapshot_to_client(
                 client,
@@ -127,16 +128,6 @@ class MarketDataBroadcaster(BaseService):
             return False
 
     async def unsubscribe(self, client: "WebSocketClient", ticker: str) -> bool:
-        """
-        Unsubscribe a client from market data for a ticker.
-
-        Args:
-            client: The WebSocket client
-            ticker: Ticker symbol to unsubscribe from
-
-        Returns:
-            True if unsubscribed successfully
-        """
         ticker = ticker.upper()
 
         if ticker not in self.tickers:
@@ -154,12 +145,7 @@ class MarketDataBroadcaster(BaseService):
 
     async def unsubscribe_all(self, client: "WebSocketClient") -> None:
         """
-        Unsubscribe a client from all tickers.
-
-        Should be called when a client disconnects.
-
-        Args:
-            client: The WebSocket client
+        Unsubscribes a client from all tickers.
         """
         async with self._lock:
             for ticker in self.tickers:
@@ -171,7 +157,6 @@ class MarketDataBroadcaster(BaseService):
         )
 
     async def get_subscriber_count(self, ticker: str) -> int:
-        """Get the number of subscribers for a ticker."""
         ticker = ticker.upper()
         if ticker not in self._subscriptions:
             return 0
@@ -179,15 +164,9 @@ class MarketDataBroadcaster(BaseService):
         async with self._lock:
             return len(self._subscriptions[ticker])
 
-    # =========================================================================
-    # Event Handlers
-    # =========================================================================
-
     async def _handle_market_data_update(self, event: Event) -> None:
         """
-        Handle MARKET_DATA_UPDATE event from Matching Engine.
-
-        Broadcasts the snapshot to all subscribed clients.
+        Handles MARKET_DATA_UPDATE events from the Matching Engine, and broadcasts to subscribed clients.
         """
         payload = MarketDataUpdatePayload.from_dict(event.payload)
         ticker = payload.ticker.upper()
@@ -197,10 +176,8 @@ class MarketDataBroadcaster(BaseService):
                 f"Received update for unknown ticker: {ticker}")
             return
 
-        # Store last snapshot
         self._last_snapshots[ticker] = payload
 
-        # Get subscribed clients
         async with self._lock:
             clients = list(self._subscriptions[ticker])
 
@@ -211,38 +188,26 @@ class MarketDataBroadcaster(BaseService):
             f"Broadcasting market data for {ticker} to {len(clients)} clients"
         )
 
-        # Broadcast to all clients
         await self._broadcast_to_clients(clients, payload)
 
         self._broadcasts_sent += 1
-
-    # =========================================================================
-    # Broadcasting
-    # =========================================================================
 
     async def _broadcast_to_clients(
         self,
         clients: List["WebSocketClient"],
         payload: MarketDataUpdatePayload,
     ) -> None:
-        """
-        Broadcast a market data snapshot to a list of clients.
-
-        Uses asyncio.gather for concurrent sends.
-        """
         message = self._format_market_data_message(payload)
 
-        # Send to all clients concurrently
         results = await asyncio.gather(
             *(self._send_to_client(client, message) for client in clients),
             return_exceptions=True,
         )
 
-        # Count successful sends
+        # counts successful sends
         successful = sum(1 for r in results if r is True)
         self._messages_sent += successful
 
-        # Log any failures
         for client, result in zip(clients, results):
             if isinstance(result, Exception):
                 self._logger.error(
@@ -254,7 +219,6 @@ class MarketDataBroadcaster(BaseService):
         client: "WebSocketClient",
         message: dict,
     ) -> bool:
-        """Send a message to a single client."""
         try:
             return await client.send(message)
         except Exception as e:
@@ -268,7 +232,6 @@ class MarketDataBroadcaster(BaseService):
         client: "WebSocketClient",
         payload: MarketDataUpdatePayload,
     ) -> bool:
-        """Send a market data snapshot to a single client."""
         message = self._format_market_data_message(payload)
         return await client.send(message)
 
@@ -308,24 +271,13 @@ class MarketDataBroadcaster(BaseService):
 
         return message
 
-    # =========================================================================
-    # Initial Snapshot
-    # =========================================================================
-
     async def send_initial_snapshot(
         self,
         client: "WebSocketClient",
         ticker: str,
     ) -> bool:
         """
-        Send the initial market data snapshot to a newly connected client.
-
-        Args:
-            client: The WebSocket client
-            ticker: Ticker to send snapshot for
-
-        Returns:
-            True if sent successfully
+        Sends the initial market data snapshot to a newly connected client.
         """
         ticker = ticker.upper()
 
@@ -348,12 +300,17 @@ class MarketDataBroadcaster(BaseService):
             self._last_snapshots[ticker]
         )
 
-    # =========================================================================
-    # Health Check
-    # =========================================================================
-
     async def health_check(self) -> dict:
-        """Return health metrics for the market data broadcaster."""
+        """
+        Return health metrics for the market data broadcaster.
+        Custom metrics include:
+
+        - Subscribers pe ticker
+        - Total subscribers
+        - Broadcasts sent
+        - Messages sent
+
+        """
         base = await super().health_check()
 
         subscriber_counts = {}

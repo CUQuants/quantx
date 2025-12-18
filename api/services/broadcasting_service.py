@@ -9,15 +9,12 @@ Responsibilities:
     - Subscribes to ORDER_PERSISTED events to send confirmations
     - Manages client connections by websocket ID
 
-Does NOT:
-    - Validate orders (RiskEngine handles this)
-    - Touch the database (PersistenceService handles this)
-    - Maintain order book state (MatchingEngine handles this)
-    - Broadcast market data (MarketDataBroadcaster handles this)
+    Note that this service does not touch the database, as 
+    the persistence service will handle database transactions.
+    This is just a communication layer between the service and client.
 """
 
 import asyncio
-import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -50,13 +47,6 @@ class WebSocketClient:
     """
 
     def __init__(self, websocket, client_id: str):
-        """
-        Initialize a WebSocket client wrapper.
-
-        Args:
-            websocket: The underlying WebSocket connection
-            client_id: Unique identifier for this client
-        """
         self.websocket = websocket
         self.client_id = client_id
         self.connected_at = datetime.now(timezone.utc)
@@ -68,15 +58,6 @@ class WebSocketClient:
         self.allowed_tickers = ["QNTX", "NVDA"]
 
     async def send(self, message: dict) -> bool:
-        """
-        Send a message to the client.
-
-        Args:
-            message: Dictionary to send as JSON
-
-        Returns:
-            True if sent successfully, False otherwise
-        """
         try:
             await self.websocket.send_json(message)
             return True
@@ -85,7 +66,6 @@ class WebSocketClient:
             return False
 
     async def send_error(self, error_type: str, error_message: str) -> bool:
-        """Send an error message to the client."""
         return await self.send({
             "type": "error",
             "error_type": error_type,
@@ -94,7 +74,6 @@ class WebSocketClient:
         })
 
     async def send_success(self, message_type: str, data: dict = None) -> bool:
-        """Send a success message to the client."""
         msg = {
             "type": message_type,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -109,7 +88,7 @@ class BroadcastingService(BaseService):
     WebSocket broadcasting service for client communication.
 
     Handles client connections, authentication, and order submission.
-    Does NOT broadcast market data (MarketDataBroadcaster handles that).
+    Does NOT broadcast market data. The MarketDataBroadcaster service does that.
     """
 
     def __init__(
@@ -118,21 +97,14 @@ class BroadcastingService(BaseService):
         auth_service,
         tickers: List[str],
     ):
-        """
-        Initialize the broadcasting service.
-
-        Args:
-            event_bus: Shared event bus
-            auth_service: Firebase auth service for token validation
-            tickers: List of supported ticker symbols
-        """
         super().__init__(event_bus)
 
         self.auth_service = auth_service
         self.tickers = [t.upper() for t in tickers]
 
-        # Client management
         self._clients: Dict[str, WebSocketClient] = {}
+
+        # Uses an asynchronous lock to prevent race condition issues
         self._clients_lock = asyncio.Lock()
 
     @property
@@ -147,20 +119,9 @@ class BroadcastingService(BaseService):
             (EventType.CANCEL_REJECTED, self._handle_cancel_rejected),
         ]
 
-    # =========================================================================
-    # Client Management
-    # =========================================================================
-
     async def add_client(self, websocket, ticker: str) -> Optional[WebSocketClient]:
         """
-        Add a new WebSocket client.
-
-        Args:
-            websocket: The WebSocket connection
-            ticker: The ticker the client is subscribing to
-
-        Returns:
-            WebSocketClient wrapper or None if ticker is invalid
+        Add a new WebSocket client, and subscribes it to a ticker
         """
         ticker = ticker.upper()
 
@@ -180,29 +141,16 @@ class BroadcastingService(BaseService):
         return client
 
     async def remove_client(self, client: WebSocketClient) -> None:
-        """Remove a client from the service."""
         async with self._clients_lock:
             if client.client_id in self._clients:
                 del self._clients[client.client_id]
                 self._logger.info(f"Client {client.client_id} disconnected")
 
     async def get_client(self, client_id: str) -> Optional[WebSocketClient]:
-        """Get a client by ID."""
         async with self._clients_lock:
             return self._clients.get(client_id)
 
-    # =========================================================================
-    # Message Handling
-    # =========================================================================
-
     async def handle_message(self, client: WebSocketClient, message: dict) -> None:
-        """
-        Handle an incoming message from a client.
-
-        Args:
-            client: The client that sent the message
-            message: The parsed message dictionary
-        """
         message_type = message.get("type")
 
         if not message_type:
@@ -264,7 +212,6 @@ class BroadcastingService(BaseService):
             f"Publishing CANCEL_ORDER: order_id={order_id} from user {user_id}"
         )
 
-        # Publish CANCEL_ORDER event
         await self.publish(EventType.CANCEL_ORDER, payload.to_dict())
 
     async def _handle_order_message(
@@ -276,8 +223,12 @@ class BroadcastingService(BaseService):
         Handle an order message from a client.
 
         Authenticates the user and publishes a RAW_ORDER event.
+
+        NOTE - logic is messy, and should be broken up into different functions such as
+        - _authenticate_user() - raises an exception if the user is not authenticated
+        - _parse_order() - parses the order and returns the RawOrderPayload - else raises an error
         """
-        # Authenticate
+
         token = message.get("token")
         auth_result = self.auth_service.validate_token(token)
 
@@ -289,16 +240,13 @@ class BroadcastingService(BaseService):
             await client.send_error(error_code, error_message)
             return
 
-        # Extract user info
         user_id = auth_result.get("user_id")
         email = auth_result.get("email")
 
-        # Update client auth status
         client.authenticated = True
         client.user_id = user_id
         client.email = email
 
-        # Parse order
         order_data = message.get("order", {})
 
         try:
@@ -317,12 +265,10 @@ class BroadcastingService(BaseService):
             await client.send_error("INVALID_ORDER_FORMAT", f"Invalid order data: {e}")
             return
 
-        # Validate ticker
         if ticker not in self.tickers:
             await client.send_error("INVALID_TICKER", f"Invalid ticker: {ticker}")
             return
 
-        # Create RAW_ORDER payload
         payload = RawOrderPayload(
             ticker=ticker,
             side=side,
@@ -339,17 +285,9 @@ class BroadcastingService(BaseService):
             f"from user {user_id}"
         )
 
-        # Publish RAW_ORDER event
         await self.publish(EventType.RAW_ORDER, payload.to_dict())
 
-    # =========================================================================
-    # Event Handlers
-    # =========================================================================
-
     async def _handle_order_rejected(self, event: Event) -> None:
-        """
-        Handle ORDER_REJECTED event - send error to client.
-        """
         payload = OrderRejectedPayload.from_dict(event.payload)
 
         client = await self.get_client(payload.websocket_id)
@@ -364,9 +302,6 @@ class BroadcastingService(BaseService):
             )
 
     async def _handle_order_persisted(self, event: Event) -> None:
-        """
-        Handle ORDER_PERSISTED event - send confirmation to client.
-        """
         payload = OrderPersistedPayload.from_dict(event.payload)
 
         client = await self.get_client(payload.websocket_id)
@@ -386,9 +321,6 @@ class BroadcastingService(BaseService):
             )
 
     async def _handle_order_cancelled(self, event: Event) -> None:
-        """
-        Handle ORDER_CANCELLED event - send cancellation confirmation to client.
-        """
         payload = OrderCancelledPayload.from_dict(event.payload)
 
         client = await self.get_client(payload.websocket_id)
@@ -407,9 +339,6 @@ class BroadcastingService(BaseService):
             )
 
     async def _handle_cancel_rejected(self, event: Event) -> None:
-        """
-        Handle CANCEL_REJECTED event - send error to client.
-        """
         payload = CancelRejectedPayload.from_dict(event.payload)
 
         client = await self.get_client(payload.websocket_id)
@@ -423,12 +352,14 @@ class BroadcastingService(BaseService):
                 f"{payload.rejection_code}"
             )
 
-    # =========================================================================
-    # Health Check
-    # =========================================================================
-
     async def health_check(self) -> dict:
-        """Return health metrics for the broadcasting service."""
+        """
+        Additional health metrics in this service include:
+
+        - Tickers allowed
+        - Clients connected
+        - Authenticated clients connected
+        """
         base = await super().health_check()
 
         async with self._clients_lock:

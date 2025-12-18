@@ -31,21 +31,18 @@ class EventType(Enum):
         ORDER_CANCELLED → MatchingEngine → MARKET_DATA_UPDATE
         ORDER_CANCELLED → BroadcastingService → client confirmation
     """
-    # Order lifecycle events
+
     RAW_ORDER = auto()           # Unauthenticated order from WebSocket (after auth)
     VALIDATED_ORDER = auto()     # Order passed risk checks, ready for matching
     ORDER_REJECTED = auto()      # Order failed validation
     ORDER_PERSISTED = auto()     # Order successfully written to DB
 
-    # Trade events
     TRADE_EXECUTED = auto()      # Match occurred in matching engine
 
-    # Market data events
     MARKET_DATA_UPDATE = auto()  # Order book changed, broadcast to clients
-    # Request for orders to be loaded from the database into memory
+
     REFRESH_MARKET_DATA = auto()
 
-    # Order cancellation events
     CANCEL_ORDER = auto()        # Request to cancel an order
     ORDER_CANCELLED = auto()     # Order successfully cancelled
     CANCEL_REJECTED = auto()     # Order cancellation failed
@@ -68,11 +65,6 @@ class Event:
         default_factory=lambda: datetime.now(timezone.utc))
     correlation_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
-
-# ============================================================================
-# Event Payload Dataclasses
-# These provide type-safe structures for event payloads
-# ============================================================================
 
 @dataclass(frozen=True)
 class RawOrderPayload:
@@ -412,7 +404,8 @@ class OrderCancelledPayload:
     ticker: str
     side: OrderSide
     price: float
-    remaining_quantity: int  # Quantity that was unfilled (for market data update)
+    # Quantity that was unfilled (for market data update)
+    remaining_quantity: int
     account_id: int
     websocket_id: str
 
