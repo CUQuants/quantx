@@ -16,6 +16,7 @@ from .risk_engine import RiskEngine
 from .persistence_service import PersistenceService
 from .broadcasting_service import BroadcastingService
 from .market_data_broadcaster import MarketDataBroadcaster
+from .event_stream_broadcaster import EventStreamBroadcaster
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,12 @@ class ServiceContainer:
             tickers=self._tickers,
         )
         
+        self._event_stream_broadcaster = EventStreamBroadcaster(
+            event_bus=self._event_bus,
+            auth_service=self._auth_service,
+            tickers=self._tickers,
+        )
+        
         self._started = False
     
     # =========================================================================
@@ -126,6 +133,11 @@ class ServiceContainer:
     def market_data_broadcaster(self) -> MarketDataBroadcaster:
         """Get the market data broadcaster service."""
         return self._market_data_broadcaster
+    
+    @property
+    def event_stream_broadcaster(self) -> EventStreamBroadcaster:
+        """Get the event stream broadcaster service."""
+        return self._event_stream_broadcaster
     
     @property
     def tickers(self) -> List[str]:
@@ -170,6 +182,7 @@ class ServiceContainer:
         await self._persistence_service.start()
         await self._broadcasting_service.start()
         await self._market_data_broadcaster.start()
+        await self._event_stream_broadcaster.start()
         
         self._started = True
         logger.info("Service container started - all services running")
@@ -186,6 +199,7 @@ class ServiceContainer:
         logger.info("Stopping service container...")
         
         # Stop services in reverse order
+        await self._event_stream_broadcaster.stop()
         await self._market_data_broadcaster.stop()
         await self._broadcasting_service.stop()
         await self._persistence_service.stop()
@@ -221,5 +235,6 @@ class ServiceContainer:
                 "persistence_service": await self._persistence_service.health_check(),
                 "broadcasting_service": await self._broadcasting_service.health_check(),
                 "market_data_broadcaster": await self._market_data_broadcaster.health_check(),
+                "event_stream_broadcaster": await self._event_stream_broadcaster.health_check(),
             },
         }

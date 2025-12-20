@@ -12,7 +12,8 @@ Architecture:
     - RiskEngine: Order validation
     - MatchingEngine: Order book and matching
     - PersistenceService: Database operations
-    - MarketDataBroadcaster: Market data distribution
+    - MarketDataBroadcaster: Market data distribution (order book snapshots)
+    - EventStreamBroadcaster: Real-time event streaming (trades, orders, cancellations)
 """
 
 import logging
@@ -104,19 +105,44 @@ async def websocket_endpoint(websocket: WebSocket, ticker: str):
         - Receive market data updates for that ticker
         - Submit orders (with authentication)
         - Receive order confirmations and rejections
+        - Subscribe to event streams (public/private)
 
-    Message format for orders:
-        {
-            "type": "order",
-            "token": "<firebase_id_token>",
-            "order": {
-                "ticker": "QNTX",
-                "type": "Buy" | "Sell",
-                "quantity": 100,
-                "price": 50.00,
-                "orderType": "LIMIT" | "MARKET"
+    Message formats:
+        Order submission:
+            {
+                "type": "order",
+                "token": "<firebase_id_token>",
+                "order": {
+                    "ticker": "QNTX",
+                    "type": "Buy" | "Sell",
+                    "quantity": 100,
+                    "price": 50.00,
+                    "orderType": "LIMIT" | "MARKET"
+                }
             }
-        }
+
+        Subscribe to public event stream:
+            {
+                "type": "subscribe_public",
+                "ticker": "QNTX"
+            }
+
+        Unsubscribe from public event stream:
+            {
+                "type": "unsubscribe_public",
+                "ticker": "QNTX"
+            }
+
+        Subscribe to private event stream (requires auth):
+            {
+                "type": "subscribe_private",
+                "token": "<firebase_id_token>"
+            }
+
+        Unsubscribe from private event stream:
+            {
+                "type": "unsubscribe_private"
+            }
     """
     ticker = ticker.upper()
     container = get_service_container()
@@ -144,7 +170,7 @@ async def websocket_endpoint(websocket: WebSocket, ticker: str):
     try:
         while True:
             data = await websocket.receive_json()
-            await container.broadcasting_service.handle_message(client, data)
+            await _handle_websocket_message(container, client, data)
 
     except WebSocketDisconnect:
         logger.info(f"Client {client.client_id} disconnected")
@@ -153,9 +179,70 @@ async def websocket_endpoint(websocket: WebSocket, ticker: str):
         logger.error(f"WebSocket error for client {client.client_id}: {e}")
 
     finally:
-        # Cleanup
+        # Cleanup all subscriptions
         await container.market_data_broadcaster.unsubscribe_all(client)
+        await container.event_stream_broadcaster.unsubscribe_all(client)
         await container.broadcasting_service.remove_client(client)
+
+
+async def _handle_websocket_message(
+    container: ServiceContainer,
+    client,
+    data: dict,
+) -> None:
+    """
+    Route incoming WebSocket messages to the appropriate handler.
+
+    Handles:
+        - order, cancel_order: Routed to BroadcastingService
+        - subscribe_public, unsubscribe_public: Routed to EventStreamBroadcaster
+        - subscribe_private, unsubscribe_private: Routed to EventStreamBroadcaster
+    """
+    message_type = data.get("type")
+
+    if not message_type:
+        await client.send_error("MISSING_TYPE", "Message type is required")
+        return
+
+    # Order-related messages go to BroadcastingService
+    if message_type in ("order", "cancel_order"):
+        await container.broadcasting_service.handle_message(client, data)
+        return
+
+    # Event stream subscription messages
+    if message_type == "subscribe_public":
+        ticker = data.get("ticker", "").upper()
+        if not ticker:
+            await client.send_error("MISSING_TICKER", "Ticker is required for public subscription")
+            return
+        await container.event_stream_broadcaster.subscribe_public(client, ticker)
+        return
+
+    if message_type == "unsubscribe_public":
+        ticker = data.get("ticker", "").upper()
+        if not ticker:
+            await client.send_error("MISSING_TICKER", "Ticker is required for unsubscription")
+            return
+        await container.event_stream_broadcaster.unsubscribe_public(client, ticker)
+        return
+
+    if message_type == "subscribe_private":
+        token = data.get("token")
+        if not token:
+            await client.send_error("MISSING_TOKEN", "Token is required for private subscription")
+            return
+        await container.event_stream_broadcaster.subscribe_private(client, token)
+        return
+
+    if message_type == "unsubscribe_private":
+        await container.event_stream_broadcaster.unsubscribe_private(client)
+        return
+
+    # Unknown message type
+    await client.send_error(
+        "INVALID_MESSAGE_TYPE",
+        f"Unknown message type: {message_type}"
+    )
 
 
 # =============================================================================

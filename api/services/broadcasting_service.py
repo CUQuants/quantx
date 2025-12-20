@@ -44,6 +44,8 @@ class WebSocketClient:
 
     Provides a consistent interface for sending messages
     regardless of the underlying WebSocket implementation.
+
+    This implementation expects the FastAPI websocket implementation to be passed in
     """
 
     def __init__(self, websocket, client_id: str):

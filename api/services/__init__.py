@@ -27,6 +27,7 @@ from .risk_engine import RiskEngine
 from .persistence_service import PersistenceService
 from .broadcasting_service import BroadcastingService
 from .market_data_broadcaster import MarketDataBroadcaster
+from .event_stream_broadcaster import EventStreamBroadcaster
 from .service_container import ServiceContainer
 
 __all__ = [
@@ -39,5 +40,6 @@ __all__ = [
     "PersistenceService",
     "BroadcastingService",
     "MarketDataBroadcaster",
+    "EventStreamBroadcaster",
     "ServiceContainer",
 ]

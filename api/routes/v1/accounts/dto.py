@@ -28,8 +28,9 @@ class AccountDTO(BaseModel):
 class FullAccountDTO(BaseModel):
     account: AccountDTO
     orders: List[OrderDTO]
-    trades_affecting: List[TradeDTO]
     positions: List[PositionDTO]
+    sell_trades: List[TradeDTO]
+    buy_trades: List[TradeDTO]
 
 # DTOs for Paginated Results; Orders, Trades, etc.
 
