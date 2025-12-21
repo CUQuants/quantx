@@ -55,6 +55,7 @@ class WebSocketClient:
         self.authenticated = False
         self.user_id: Optional[str] = None
         self.email: Optional[str] = None
+        self.account_id: Optional[int] = None  # Database account ID
         self.subscribed_tickers: Set[str] = set()
 
         self.allowed_tickers = ["QNTX", "NVDA"]

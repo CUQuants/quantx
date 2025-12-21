@@ -71,3 +71,11 @@ class Account(Base):
         lazy="selectin",
         primaryjoin="Account.id == foreign(Position.account_id)",
     )
+
+    api_keys: Mapped[list["ApiKey"]] = relationship(
+        "ApiKey",
+        back_populates="account",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+    )
