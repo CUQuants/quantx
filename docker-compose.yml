@@ -1,0 +1,89 @@
+# ============================================================================
+# QuantX Trading Platform - Docker Compose
+# 
+# Usage:
+#   Development:  docker-compose up --build
+#   Background:   docker-compose up -d --build
+#   Logs:         docker-compose logs -f quantx-api
+#   Stop:         docker-compose down
+#   Clean:        docker-compose down -v  (removes volumes too)
+# ============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: quantx-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-quantx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quantx_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-quantx}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quantx} -d ${POSTGRES_DB:-quantx}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - quantx-network
+
+  # ---------------------------------------------------------------------------
+  # QuantX Trading API
+  # ---------------------------------------------------------------------------
+  quantx-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quantx-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database connection (async driver for SQLAlchemy)
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-quantx}:${POSTGRES_PASSWORD:-quantx_secret}@postgres:5432/${POSTGRES_DB:-quantx}
+      
+      # Firebase configuration (mount service account or use env vars)
+      GOOGLE_APPLICATION_CREDENTIALS: /app/service-account.json
+      
+      # Application settings
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+    volumes:
+      # Mount Firebase service account (required for auth)
+      - ./service-account.json:/app/service-account.json:ro
+      
+      # Optional: Mount for development hot-reload (uncomment for dev)
+      # - .:/app
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/simple"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - quantx-network
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  quantx-network:
+    driver: bridge
+
+# -----------------------------------------------------------------------------
+# Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+

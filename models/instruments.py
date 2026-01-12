@@ -51,7 +51,7 @@ class Option(Instrument):
     underlying_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), index=True)
 
     strike: Mapped[float] = mapped_column(Float, nullable=False)
-    expiry: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    expiry: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     option_type: Mapped[OptionType] = mapped_column(sqlalchemy.Enum(OptionType), nullable=False)
     multiplier: Mapped[float] = mapped_column(Float, default=0.0)
 

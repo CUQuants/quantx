@@ -1,3 +1,4 @@
+import os
 from engine_server.auth.auth_service import AuthService
 from firebase_admin import auth, credentials
 import firebase_admin
@@ -7,7 +8,14 @@ from models import Account
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if not firebase_admin._apps:
-    cred = credentials.Certificate("service-account.json")
+    # Use GOOGLE_APPLICATION_CREDENTIALS environment variable if set
+    # Falls back to service-account.json if env var not set (for local dev)
+    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if cred_path and os.path.exists(cred_path):
+        cred = credentials.Certificate(cred_path)
+    else:
+        # Fallback to default path for local development
+        cred = credentials.Certificate("service-account.json")
     firebase_admin.initialize_app(cred)
 
 

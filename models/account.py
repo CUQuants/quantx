@@ -32,9 +32,9 @@ class Account(Base):
         sqlalchemy.Enum(AccountRole), default=AccountRole.USER)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now(timezone.utc))
+        DateTime(timezone=True), default=datetime.now(timezone.utc))
     last_login_at: Mapped[Optional[datetime]
-                          ] = mapped_column(DateTime, nullable=True, default=datetime.now(timezone.utc))
+                          ] = mapped_column(DateTime(timezone=True), nullable=True, default=datetime.now(timezone.utc))
 
     orders: Mapped[list["Order"]] = relationship(
         "Order",

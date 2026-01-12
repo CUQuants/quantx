@@ -155,35 +155,41 @@ class RiskEngine(BaseService):
             OrderValidationError if invalid
         """
         async with self._session_factory() as session:
-            # Get or create account
-            account = await self._get_account(session, payload.user_id, payload.email)
+            async with session.begin():
+                # Get or create account
+                account = await self._get_account(session, payload.user_id, payload.email)
 
-            if not account:
-                raise OrderValidationError(
-                    "ACCOUNT_NOT_FOUND",
-                    "Unable to find or create account"
-                )
+                if not account:
+                    raise OrderValidationError(
+                        "ACCOUNT_NOT_FOUND",
+                        "Unable to find or create account"
+                    )
 
-            # Basic validation
-            self._validate_basic_fields(payload)
+                # Basic validation
+                self._validate_basic_fields(payload)
 
-            # Determine execution price for validation
-            execution_price = await self._get_execution_price(payload)
-            estimated_value = execution_price * payload.quantity
+                # Determine execution price for validation
+                execution_price = await self._get_execution_price(payload)
+                estimated_value = execution_price * payload.quantity
 
-            # Validate based on order side
-            if payload.side == OrderSide.BUY:
-                await self._validate_buy_order(
-                    session, account, payload, execution_price, estimated_value
-                )
-            else:
-                await self._validate_sell_order(
-                    session, account, payload
-                )
+                # Validate based on order side
+                if payload.side == OrderSide.BUY:
+                    await self._validate_buy_order(
+                        session, account, payload, execution_price, estimated_value
+                    )
+                else:
+                    await self._validate_sell_order(
+                        session, account, payload
+                    )
 
-            # Check for self-matching (optional, can be expanded)
-            # await self._check_self_matching(session, account, payload)
+                # Check for self-matching (optional, can be expanded)
+                # await self._check_self_matching(session, account, payload)
 
+                # Commit the account creation (if it was new) by committing the transaction
+                # The account_id is captured before the transaction commits
+                account_id = account.id
+
+            # Return the validated payload with the account_id
             return ValidatedOrderPayload(
                 order_id=str(uuid.uuid4()),
                 ticker=payload.ticker,
@@ -193,7 +199,7 @@ class RiskEngine(BaseService):
                 price=execution_price,
                 user_id=payload.user_id,
                 email=payload.email,
-                account_id=account.id,
+                account_id=account_id,
                 websocket_id=payload.websocket_id,
                 estimated_value=estimated_value,
             )

@@ -51,8 +51,8 @@ class Order(Base):
     status: Mapped[OrderStatus] = mapped_column(
         sqlalchemy.Enum(OrderStatus), default=OrderStatus.PENDING)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now(timezone.utc), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(
+        DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now(
         timezone.utc), onupdate=func.now(), nullable=False)
 
     account: Mapped["Account"] = relationship(
@@ -111,7 +111,7 @@ class Trade(Base):
     price: Mapped[float] = mapped_column(Float, nullable=False)
     trade_value: Mapped[float] = mapped_column(Float, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now(timezone.utc), nullable=False, index=True)
+        DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False, index=True)
 
     buy_order: Mapped["Order"] = relationship(
         "Order",
@@ -163,7 +163,7 @@ class Position(Base):
     unrealized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
     realized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         default=datetime.now(timezone.utc),
         onupdate=func.now(),
         nullable=False,

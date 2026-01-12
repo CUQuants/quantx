@@ -176,7 +176,7 @@ async def get_positions(
 
 
 @router.patch("/{account_id}/role", response_model=AccountDTO, dependencies=[Depends(admin)])
-async def update_account_role(account_id, dto: AccountUpdateRoleRequest, session: AsyncSession = Depends(get_session), auth: AuthContext = Depends(current_auth)):
+async def update_account_role(account_id: int, dto: AccountUpdateRoleRequest, session: AsyncSession = Depends(get_session), auth: AuthContext = Depends(current_auth)):
     resp = await session.execute(get_account_by_id(account_id))
     account: Account = resp.scalar_one_or_none()
 

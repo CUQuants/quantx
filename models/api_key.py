@@ -49,19 +49,19 @@ class ApiKey(Base):
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, 
+        DateTime(timezone=True), 
         default=lambda: datetime.now(timezone.utc),
         nullable=False
     )
     
     last_used_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, 
+        DateTime(timezone=True), 
         nullable=True
     )
     
     # Optional expiration (null = never expires)
     expires_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, 
+        DateTime(timezone=True), 
         nullable=True
     )
     
