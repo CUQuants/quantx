@@ -15,10 +15,12 @@ from .instruments import Instrument, InstrumentType, Equity, Option, OptionType,
 from .trading import Order, OrderStatus, OrderType, OrderSide, Position, Trade
 from .account import AccountRole, Account
 from .settlement import SettlementStatus, SettlementRun, AttendanceEvent, Payout
+from .api_key import ApiKey
 
 __all__ = [
     "Account",
     "AccountRole",
+    "ApiKey",
     "AttendanceEvent",
     "Base",
     "Equity",

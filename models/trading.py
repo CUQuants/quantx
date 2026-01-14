@@ -51,8 +51,8 @@ class Order(Base):
     status: Mapped[OrderStatus] = mapped_column(
         sqlalchemy.Enum(OrderStatus), default=OrderStatus.PENDING)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now(timezone.utc), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(
+        DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now(
         timezone.utc), onupdate=func.now(), nullable=False)
 
     account: Mapped["Account"] = relationship(
@@ -111,7 +111,7 @@ class Trade(Base):
     price: Mapped[float] = mapped_column(Float, nullable=False)
     trade_value: Mapped[float] = mapped_column(Float, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now(timezone.utc), nullable=False, index=True)
+        DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False, index=True)
 
     buy_order: Mapped["Order"] = relationship(
         "Order",
@@ -158,16 +158,22 @@ class Position(Base):
         "accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     symbol: Mapped[str] = mapped_column(String, default="CQAF", index=True)
     quantity: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_shares: Mapped[int] = mapped_column(Integer, default=0)
     average_price: Mapped[float] = mapped_column(Float, default=0.0)
     unrealized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
     realized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         default=datetime.now(timezone.utc),
         onupdate=func.now(),
         nullable=False,
         index=True,
     )
+
+    @property
+    def available_shares(self) -> int:
+        """Shares available for selling (not reserved in active sell orders)."""
+        return self.quantity - self.reserved_shares
 
     account: Mapped["Account"] = relationship(
         "Account",

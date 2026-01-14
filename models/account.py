@@ -32,9 +32,9 @@ class Account(Base):
         sqlalchemy.Enum(AccountRole), default=AccountRole.USER)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now(timezone.utc))
+        DateTime(timezone=True), default=datetime.now(timezone.utc))
     last_login_at: Mapped[Optional[datetime]
-                          ] = mapped_column(DateTime, nullable=True, default=datetime.now(timezone.utc))
+                          ] = mapped_column(DateTime(timezone=True), nullable=True, default=datetime.now(timezone.utc))
 
     orders: Mapped[list["Order"]] = relationship(
         "Order",
@@ -70,4 +70,12 @@ class Account(Base):
         passive_deletes=True,  # keep only if Position.account_id has ondelete="CASCADE"
         lazy="selectin",
         primaryjoin="Account.id == foreign(Position.account_id)",
+    )
+
+    api_keys: Mapped[list["ApiKey"]] = relationship(
+        "ApiKey",
+        back_populates="account",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
     )

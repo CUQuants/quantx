@@ -19,7 +19,7 @@ class AttendanceEvent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     symbol: Mapped[str] = mapped_column(String, index=True)  # e.g. "CQAL" or event-specific symbol
     meeting_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    observed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     headcount: Mapped[int] = mapped_column(Integer)
 
 class SettlementRun(Base):
@@ -27,10 +27,10 @@ class SettlementRun(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     symbol: Mapped[str] = mapped_column(String, index=True)
-    effective_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     settlement_price: Mapped[float] = mapped_column(Float)
     status: Mapped[SettlementStatus] = mapped_column(default=SettlementStatus.PENDING)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     payouts: Mapped[list["Payout"]] = relationship(back_populates="run", cascade="all, delete-orphan")
 
@@ -46,6 +46,6 @@ class Payout(Base):
     settlement_price: Mapped[float] = mapped_column(Float)
     realized_pnl: Mapped[float] = mapped_column(Float)    # cash to credit/debit
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     run: Mapped["SettlementRun"] = relationship(back_populates="payouts")
