@@ -58,5 +58,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Run the application
 # Using uvicorn with production settings
-CMD ["uvicorn", "api.main_v2:app", "--host", "0.0.0.0", "--port", "8000"]
+# Railway provides PORT env var, default to 8000 for local development
+CMD ["sh", "-c", "uvicorn api.main_v2:app --host 0.0.0.0 --port ${PORT:-8000}"]
 
