@@ -173,7 +173,7 @@ class OrderBroadcaster(BaseBroadcaster):
 
     async def handle_order(self, websocket: ServerConnection, msg: dict):
         token = msg.get("token", None)
-        response = self.auth_service.validate_token(token)
+        response = await self.auth_service.validate_token(token)
 
         if response.get("success", False) == False:
             error_type, error_message = response.get(

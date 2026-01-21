@@ -7,10 +7,12 @@ class AuthService(ABC):
         self.clients = {}
 
     @abstractmethod
-    def validate_token(self, token) -> dict:
+    async def validate_token(self, token) -> dict:
         """
-        Validates an auth token, returns an object which includes user id
-        May also return an error object with a specific error message
+        Validates an auth token asynchronously.
+        
+        Returns an object which includes user id on success,
+        or an error object with a specific error message on failure.
         """
         pass
 

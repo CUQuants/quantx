@@ -1,3 +1,4 @@
+import asyncio
 import os
 import json
 from engine_server.auth.auth_service import AuthService
@@ -50,14 +51,19 @@ class FirebaseAuth(AuthService):
     def __init__(self):
         super().__init__()
 
-    def validate_token(self, token) -> dict:
-
+    async def validate_token(self, token) -> dict:
+        """
+        Validate a Firebase ID token asynchronously.
+        
+        Uses asyncio.to_thread() to run the blocking Firebase SDK call
+        in a thread pool, preventing it from blocking the async event loop.
+        """
         if token[:-1] == "BOT_TOKEN":
             return {"success": True, "user_id": f"BOT_ID{token[-1]}", "email": f"bot{token[-1]}@cuquants.com"}
 
         try:
-
-            decoded_token = auth.verify_id_token(token)
+            # Run blocking Firebase call in thread pool to avoid blocking event loop
+            decoded_token = await asyncio.to_thread(auth.verify_id_token, token)
             user_id = decoded_token['user_id']
 
             return {"success": True, "user_id": user_id, "email": decoded_token["email"]}

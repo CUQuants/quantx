@@ -178,7 +178,7 @@ class BroadcastingService(BaseService):
         """
         # Authenticate
         token = message.get("token")
-        auth_result = self.auth_service.validate_token(token)
+        auth_result = await self.auth_service.validate_token(token)
 
         if not auth_result.get("success", False):
             error_code = auth_result.get("error_code", "AUTH_ERROR")
@@ -233,7 +233,7 @@ class BroadcastingService(BaseService):
         """
 
         token = message.get("token")
-        auth_result = self.auth_service.validate_token(token)
+        auth_result = await self.auth_service.validate_token(token)
 
         if not auth_result.get("success", False):
             error_code = auth_result.get("error_code", "AUTH_ERROR")

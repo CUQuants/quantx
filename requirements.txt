@@ -16,5 +16,7 @@ sortedcontainers
 pytest
 anyio
 
+gunicorn
+uvicorn[standard]
 
 firebase-admin
