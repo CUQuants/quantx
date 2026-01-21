@@ -97,6 +97,7 @@ app = FastAPI(
     description="Service-oriented trading platform with real-time WebSocket support",
     version="2.0.0",
     lifespan=lifespan,
+    redirect_slashes=False,  # Prevent 307 redirects for trailing slash mismatches
 )
 
 app.include_router(all_routes, prefix="/api")
