@@ -45,7 +45,7 @@ async def get_trade(trade_id: int, session: AsyncSession = Depends(get_session),
 
 
 @router.get(
-    "/",
+    "",
     response_model=List[TradeDTO],
     dependencies=[Depends(owner_or_admin)],
 )

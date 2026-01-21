@@ -27,7 +27,7 @@ async def get_me(auth: AuthContext = Depends(current_auth)):
     return AccountDTO.model_validate(auth.account)
 
 
-@router.get("/", response_model=List[AccountDTO])
+@router.get("", response_model=List[AccountDTO])
 async def get_accounts(dependencies=[Depends(current_auth)], session: AsyncSession = Depends(get_session), filters: AccountFilters = Depends()):
 
     query = get_all_accounts
