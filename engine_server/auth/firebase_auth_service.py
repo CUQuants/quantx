@@ -11,44 +11,37 @@ from sqlalchemy.ext.asyncio import AsyncSession
 if not firebase_admin._apps:
     # Firebase credentials initialization
     # Supports multiple methods (in order of preference):
-    # 1. FIREBASE_SERVICE_ACCOUNT_JSON env var (Railway secrets) - creates file at runtime
+    # 1. FIREBASE_SERVICE_ACCOUNT_JSON env var (Railway/cloud) - JSON string directly
     # 2. GOOGLE_APPLICATION_CREDENTIALS env var pointing to existing file
     # 3. service-account.json in current directory (local dev)
     
-    cred_path = None
+    cred = None
     firebase_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
     
     if firebase_json:
-        # Option 1: Create file from JSON env var (Railway/deployment)
-        # Write to /app/service-account.json (Docker) or current dir (local)
-        target_path = "/app/service-account.json" if os.path.exists("/app") else "service-account.json"
-        
+        # Option 1: Parse JSON directly from env var (no file needed!)
         try:
-            # Validate JSON and write to file
-            json.loads(firebase_json)  # Validate JSON format
-            with open(target_path, "w") as f:
-                f.write(firebase_json)
-            cred_path = target_path
-        except (json.JSONDecodeError, IOError) as e:
-            raise ValueError(f"Failed to write Firebase credentials from FIREBASE_SERVICE_ACCOUNT_JSON: {e}")
+            cred_dict = json.loads(firebase_json)
+            cred = credentials.Certificate(cred_dict)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in FIREBASE_SERVICE_ACCOUNT_JSON: {e}")
     else:
         # Option 2: Check GOOGLE_APPLICATION_CREDENTIALS env var
         env_cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         if env_cred_path and os.path.exists(env_cred_path):
-            cred_path = env_cred_path
+            cred = credentials.Certificate(env_cred_path)
         else:
             # Option 3: Fallback to default path (local development)
             default_path = "service-account.json"
             if os.path.exists(default_path):
-                cred_path = default_path
+                cred = credentials.Certificate(default_path)
             else:
                 raise ValueError(
                     "Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT_JSON env var, "
                     "GOOGLE_APPLICATION_CREDENTIALS pointing to a file, or place service-account.json in the working directory"
                 )
     
-    # Initialize Firebase with the credentials file
-    cred = credentials.Certificate(cred_path)
+    # Initialize Firebase
     firebase_admin.initialize_app(cred)
 
 
