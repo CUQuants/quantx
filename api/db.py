@@ -15,6 +15,11 @@ if not DATABASE_URL:
         "For local dev: Create a .env file with DATABASE_URL."
     )
 
+# Railway provides postgresql:// but we need postgresql+asyncpg:// for async SQLAlchemy
+# This handles both formats seamlessly
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
 engine = create_async_engine(DATABASE_URL, echo=False, future=True)
 SessionFactory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
