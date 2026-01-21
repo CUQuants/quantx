@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional, Any, Callable
@@ -79,8 +80,12 @@ async def _get_or_create_account(
     session.add(acct)
     await session.flush()
 
-    fb_auth.set_custom_user_claims(
-        firebase_uid, {'role': 'admin', 'db_id': acct.id})
+    # Run blocking Firebase call in thread pool
+    await asyncio.to_thread(
+        fb_auth.set_custom_user_claims,
+        firebase_uid,
+        {'role': 'admin', 'db_id': acct.id}
+    )
 
     try:
         await session.commit()
@@ -96,9 +101,27 @@ async def _get_or_create_account(
 
 
 async def _touch_last_login(session: AsyncSession, account: Account) -> None:
-    account.last_login_at = datetime.now(timezone.utc)
-    session.add(account)
-    await session.commit()
+    """
+    Update last_login_at timestamp, but only if it's been more than 5 minutes.
+    
+    This avoids a DB commit on every single request while still tracking
+    user activity at a reasonable granularity.
+    """
+    now = datetime.now(timezone.utc)
+    
+    # Only update if last login was more than 5 minutes ago (or never)
+    should_update = account.last_login_at is None
+    if not should_update and account.last_login_at is not None:
+        # Handle both timezone-aware and naive datetimes from DB
+        last_login = account.last_login_at
+        if last_login.tzinfo is None:
+            last_login = last_login.replace(tzinfo=timezone.utc)
+        should_update = (now - last_login).total_seconds() > 300
+    
+    if should_update:
+        account.last_login_at = now
+        session.add(account)
+        await session.commit()
 
 
 def _extract_bearer(auth_header: Optional[str]) -> Optional[str]:
@@ -111,9 +134,16 @@ def _extract_bearer(auth_header: Optional[str]) -> Optional[str]:
     return token if scheme.lower() == "bearer" and token else None
 
 
-def _verify_token_or_401(id_token: str) -> dict[str, Any]:
+async def _verify_token_or_401(id_token: str) -> dict[str, Any]:
+    """
+    Verify Firebase ID token asynchronously.
+    
+    Uses asyncio.to_thread() to run the blocking Firebase SDK call
+    in a thread pool, preventing it from blocking the async event loop.
+    """
     try:
-        return fb_auth.verify_id_token(id_token)
+        # Run blocking Firebase call in thread pool
+        return await asyncio.to_thread(fb_auth.verify_id_token, id_token)
     except fb_auth.ExpiredIdTokenError:
         raise HTTPException(
             status_code=401,
@@ -143,7 +173,7 @@ async def optional_auth_context(
     if not token:
         return None
 
-    decoded = _verify_token_or_401(token)
+    decoded = await _verify_token_or_401(token)
 
     # Optional provider check for Google OAuth only
     if require_google_provider:
@@ -179,7 +209,7 @@ async def current_auth(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    decoded = _verify_token_or_401(token)
+    decoded = await _verify_token_or_401(token)
 
     if require_google_provider:
         provider = (decoded.get("firebase") or {}).get("sign_in_provider")
