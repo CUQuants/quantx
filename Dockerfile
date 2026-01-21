@@ -57,9 +57,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health/simple || exit 1
 
 # Run the application
-# Using gunicorn with uvicorn workers for production
-# - 4 workers for concurrent request handling
+# Using gunicorn with a single uvicorn worker for production
+# - 1 worker to maintain consistent in-memory state (order books, event bus)
 # - UvicornWorker for async support
 # Railway provides PORT env var, default to 8000 for local development
-CMD ["sh", "-c", "gunicorn api.main_v2:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000}"]
+CMD ["sh", "-c", "gunicorn api.main_v2:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000}"]
 

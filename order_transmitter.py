@@ -153,7 +153,9 @@ async def main():
 
     # Suppose your server exposes rooms like ws://localhost:8765/ws/<TICKER>
     TICKER = "NVDA"
-    WS_URL = f"ws://localhost:8000/ws/{TICKER}"
+    # WS_URL = f"ws://localhost:8000/ws/{TICKER}"
+
+    WS_URL = f"wss://quantx-api-production.up.railway.app/ws/{TICKER}";
 
     # Whatever your AuthService.validate_token() expects as "token"
     # If you're not validating yet, you can pass literally any string.
