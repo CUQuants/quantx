@@ -9,6 +9,7 @@ from sqlalchemy.sql import Select
 class PaginatedResult(BaseModel):
     page: int
     page_size: int
+    total_count: int
 
 
 class PaginatedFilters(BaseModel):

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 from typing import Literal
 
 from models import OrderSide, OrderType, OrderStatus
@@ -18,6 +18,12 @@ class OrderDTO(BaseModel):
     filled_quantity: int
     created_at: datetime
     updated_at: datetime
+    
+    @computed_field
+    @property
+    def remaining_quantity(self) -> int:
+        """Compute remaining quantity from quantity and filled_quantity."""
+        return self.quantity - self.filled_quantity
 
 
 class TradeDTO(BaseModel):

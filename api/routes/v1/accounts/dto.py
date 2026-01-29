@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 from api.routes.v1.trades.dto import TradeDTO, OrderDTO, PositionDTO
 from api.util.pagination import PaginatedResult, PaginatedFilters
-from models import AccountRole, OrderStatus
+from models import AccountRole
 
 
 class AccountFilters(PaginatedFilters):
@@ -17,9 +17,9 @@ class AccountDTO(BaseModel):
     id: int
     username: str
     balance: float
+    available_cash: float
     role: AccountRole
     last_login_at: Optional[datetime]
-    available_cash: float
 
 
 # Be weary of use, super duper expensive to query
@@ -50,7 +50,7 @@ class PositionsResult(PaginatedResult):
 
 
 class OrdersFilters(PaginatedFilters):
-    status: Optional[OrderStatus] = None
+    status: Optional[str] = None  # Accept string, convert to enum in route
     symbol: Optional[str] = None
 
 
@@ -67,7 +67,13 @@ class PositionsFilters(PaginatedFilters):
 
 
 class AccountUpdateBalanceRequest(BaseModel):
+    """Legacy request - kept for backwards compatibility."""
     balance: float
+
+
+class AccountAdjustBalanceRequest(BaseModel):
+    """Adjust balance by an amount (positive to add, negative to remove)."""
+    amount: float
 
 
 class AccountUpdateRoleRequest(BaseModel):

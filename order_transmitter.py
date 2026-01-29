@@ -152,10 +152,10 @@ async def main():
     """
 
     # Suppose your server exposes rooms like ws://localhost:8765/ws/<TICKER>
-    TICKER = "NVDA"
-    # WS_URL = f"ws://localhost:8000/ws/{TICKER}"
+    TICKER = "QNTX"
+    WS_URL = f"ws://localhost:8000/ws/{TICKER}"
 
-    WS_URL = f"wss://quantx-api-production.up.railway.app/ws/{TICKER}";
+    # WS_URL = f"wss://quantx-api-production.up.railway.app/ws/{TICKER}";
 
     # Whatever your AuthService.validate_token() expects as "token"
     # If you're not validating yet, you can pass literally any string.
@@ -170,7 +170,7 @@ async def main():
         user_id=random_id("A"),
         min_price=45.5,
         max_price=50,
-        delay_between_orders=0.3,
+        delay_between_orders=0.5,
     )
 
     bot_b = DummyOrderClient(
@@ -180,7 +180,7 @@ async def main():
         user_id=random_id("B"),
         min_price=45,
         max_price=50,
-        delay_between_orders=0.3,
+        delay_between_orders=0.5,
     )
 
     bot_c = DummyOrderClient(
@@ -190,7 +190,7 @@ async def main():
         user_id=random_id("C"),
         min_price=45,
         max_price=50,
-        delay_between_orders=0.3,
+        delay_between_orders=0.5,
     )
 
     # Run them all at once
